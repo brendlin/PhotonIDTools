@@ -29,15 +29,15 @@ variables = {
 #     'ph.rhad'      ,
 #     'ph.e277'      ,
 #     'ph.f1'        ,
-    'CutHadLeakage':['ph.rhad'      ,  -0.08,    0.06,'R_{Had}'],
-    'Reta37'       :['ph.reta'      ,0.91753,    1.04,'R_{#eta}'],
-    'Rphi33'       :['ph.rphi'      ,    0.5,     1.0,'R_{#phi}'],
-    'weta2'        :['ph.weta2'     , 0.0065,   0.016,'W_{#eta^{}2}'],
-    'fracm'        :['ph.fside'     ,   -0.5,    1.45,'f_{side}'],
-    'wtot'         :['ph.wstot'     ,    0.0,     6.0,'W_{stot}'],
-    'w1'           :['ph.w1'        ,    0.0,     0.8,'W_{s3}'],
-    'deltae'       :['ph.deltae'    ,    0.0,     600,'#Delta^{}E'],
-    'DEmaxs1'      :['ph.eratio'    ,    0.2,     1.0,'E_{ratio}'],
+    'CutHadLeakage':['ph.rhad*(0.8 < fabs(ph.eta2) && fabs(ph.eta2) < 1.37) + ph.rhad1*(!(0.8 < fabs(ph.eta2) && fabs(ph.eta2) < 1.37))',-0.03,0.07,'R_{Had}'],
+    'Reta37'       :['ph.reta'      ,   0.80,    1.01,'R_{#eta}'    ],
+    'Rphi33'       :['ph.rphi'      ,   0.45,     1.0,'R_{#phi}'    ],
+    'weta2'        :['ph.weta2'     , 0.0065, 0.01599,'W_{#eta^{}2}'],
+    'fracm'        :['ph.fside'     ,  0.001,   0.799,'f_{side}'    ],
+    'wtot'         :['ph.wstot'     ,      1,   4.999,'W_{stot}'    ],
+    'w1'           :['ph.w1'        ,   0.45,    0.85,'W_{s3}'      ],
+    'deltae'       :['ph.deltae'    , 0.0001,   799.9,'#Delta^{}E'  ],
+    'DEmaxs1'      :['ph.eratio'    , 0.6001,   1.049,'E_{ratio}'   ],
     }
 
 #-----------------------------------------------
@@ -218,12 +218,14 @@ def main(options,args) :
                         if pads[-1].GetPrimitive('legend') :
                             pads[-1].GetPrimitive('legend').Delete()
 
-                    if not os.path.exists(status) :
-                        os.makedirs(status)
-                    can_barrel.Print('%s/barrel_%s_%s.pdf'%(status,var,status))
-                    can_endcap.Print('%s/endcap_%s_%s.pdf'%(status,var,status))
                 ## end barrel / EC block
             ## end eta block
+
+            if not os.path.exists(status) :
+                os.makedirs(status)
+            can_barrel.Print('%s/barrel_%s_%s.pdf'%(status,var,status))
+            can_endcap.Print('%s/endcap_%s_%s.pdf'%(status,var,status))
+
         ## end status block
     return
     
