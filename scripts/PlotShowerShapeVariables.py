@@ -75,10 +75,7 @@ def main(options,args) :
 
         for var in variables.keys() :
 
-            treevar = variables[var][0]
-            bins = '(%s,%s,%s)'%(100,variables[var][1],variables[var][2])
-
-            # Reset tobject_collector
+            # Reset PlotFunctions tobject_collector
             del plotfunc.tobject_collector[:]
 
             can_barrel = ROOT.TCanvas('can_%s_%s_barrel'%(var,status),'blah',int(1464),700)
@@ -127,18 +124,16 @@ def main(options,args) :
                         cuts.append('ph.convFlag == 0')
 
                     weight = (weight_radz+'*(%s)'%(' && '.join(cuts))).lstrip('*')
+                    treevar = variables[var][0]
+
+                    # Needed to pass options to histogram-getter function
+                    class options : pass
+                    options.limits = dict()
+                    options.limits[treevar] = [100,variables[var][1],variables[var][2]]
 
                     # Get the histogram
-                    name = '%s_%s_%d_%d'%(var,status,et,eta)
-                    arg1,arg2,arg3 = '%s>>%s%s'%(treevar,name,bins),weight,'egoff'
-                    ROOT.gEnv.SetValue('Hist.Binning.1D.x','100')
-                    print 'tree.Draw(\'%s\',\'%s\',\'%s\')'%(arg1,arg2,arg3)
-                    tmp = ROOT.gErrorIgnoreLevel
-                    ROOT.gErrorIgnoreLevel = ROOT.kFatal
-                    trees_s[keys_s[0]].Draw(arg1,arg2,arg3)
-                    ROOT.gErrorIgnoreLevel = tmp
-
-                    sig_hists.append(ROOT.gDirectory.Get(name))
+                    hist = anaplot.GetVariableHistsFromTrees(trees_s,keys_s,treevar,weight,options)[0]
+                    sig_hists.append(hist)
                     sig_hists[-1].SetTitle('signal')
                     sig_hists[-1].SetLineColor(ROOT.kBlack)
                     sig_hists[-1].SetLineWidth(2)
