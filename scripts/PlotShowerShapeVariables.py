@@ -18,9 +18,6 @@ import python.TAxisFunctions as taxisfunc
 import python.PyAnalysisPlotting as anaplot
 from python.ShowerShapeEvolutionPlotter import ShowerShapeEvolutionPlot
 
-weight_radz = 'mc_weight.pu*mc_weight.gen'
-weight_singlephoton = 'mcTotWeightNoPU_PIDuse'
-
 variables = {
 #     'ph.e277'      ,
 #     'ph.f1'        ,
@@ -122,6 +119,7 @@ def main(options,args) :
                     else :
                         cuts.append('ph.convFlag == 0')
 
+                    weight_radz = 'mc_weight.pu*mc_weight.gen'
                     weight = (weight_radz+'*(%s)'%(' && '.join(cuts))).lstrip('*')
                     treevar = variables[var][0]
 
@@ -142,6 +140,8 @@ def main(options,args) :
                         cuts[i] = cuts[i].replace('ph.pt'      ,'y_pt*1000.' )
                         cuts[i] = cuts[i].replace('ph.eta2'    ,'y_eta_cl_s2')
                         cuts[i] = cuts[i].replace('ph.convFlag','y_convType' )
+                    cuts.append('y_isTruthMatchedPhoton == 1')
+                    weight_singlephoton = 'mcTotWeightNoPU_PIDuse'
                     weight = (weight_singlephoton+'*(%s)'%(' && '.join(cuts))).lstrip('*')
                     treevar = variables[var][1]
                     options.limits[treevar] = [100,variables[var][2],variables[var][3]]
