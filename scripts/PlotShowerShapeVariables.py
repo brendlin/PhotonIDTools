@@ -6,10 +6,14 @@ from array import array
 
 # Add base path
 the_path = ('/').join(os.path.abspath(__file__).split('/')[:-2]) 
+
+python_path = '%s/python'%(the_path)
+print 'Adding %s to PYTHONPATH.'%(python_path)
+sys.path.append(python_path)
+
 genericUtils_path = '%s/genericUtils'%(the_path)
 print 'Adding %s to PYTHONPATH.'%(genericUtils_path)
 sys.path.append(genericUtils_path)
-ROOT.gROOT.SetMacroPath(genericUtils_path)
 
 ROOT.gROOT.SetBatch(True)
 
@@ -17,6 +21,7 @@ import python.PlotFunctions as plotfunc
 import python.TAxisFunctions as taxisfunc
 import python.PyAnalysisPlotting as anaplot
 from python.ShowerShapeEvolutionPlotter import ShowerShapeEvolutionPlot
+import PhotonIDHelpers as idhelpers
 
 variables = {
 #     'ph.e277'      ,
@@ -39,11 +44,14 @@ def main(options,args) :
     plotfunc.SetupStyle()
 
     confs = dict()
-    for confstr in ['tight','loose'] :
+    for confstr in ['tight','loose','menu3'] :
         print 'Using %s for %s'%(getattr(options,confstr),confstr)
         confs[confstr] = ROOT.TEnv(getattr(options,confstr))
 
     for status in ['Converted','NonConverted'] :
+
+        if status == 'NonConverted' :
+            variables['Rphi33'][2] = 0.75
 
         print 'Making plots for %s'%(status)
 
@@ -107,13 +115,17 @@ def main(options,args) :
                 cuts_graphs['loose'] = GetCutsGraph('Loose cuts')
                 cuts_graphs['loose'].SetLineColor(ROOT.kOrange+5)
 
+                # menu 3 graph
+                cuts_graphs['menu3'] = GetCutsGraph('Old Tight')
+                cuts_graphs['menu3'].SetLineColor(ROOT.kGray+1)
+
                 for et in range(len(et_bins)-1) :
 
                     cuts = []
                     cuts.append('ph.pt > %2.1f'%(et_bins[et]))
                     cuts.append('ph.pt < %2.1f'%(et_bins[et+1]))
-                    cuts.append('ph.eta2 > %2.2f'%(eta_bins[eta]))
-                    cuts.append('ph.eta2 < %2.2f'%(eta_bins[eta+1]))
+                    cuts.append('fabs(ph.eta2) > %2.2f'%(eta_bins[eta]))
+                    cuts.append('fabs(ph.eta2) < %2.2f'%(eta_bins[eta+1]))
                     if status == 'Converted' :
                         cuts.append('ph.convFlag > 0')
                     else :
@@ -131,7 +143,7 @@ def main(options,args) :
                     hist = anaplot.GetVariableHistsFromTrees(trees_rz,keys_rz,treevar,weight,options)
                     if hist :
                         radz_hists.append(hist[0])
-                        radz_hists[-1].SetTitle('Radiative-Z')
+                        radz_hists[-1].SetTitle('Z#rightarrow^{}ll#gamma MC (fudged)')
                         radz_hists[-1].SetLineColor(ROOT.kBlack)
                         radz_hists[-1].SetLineWidth(2)
 
@@ -150,22 +162,15 @@ def main(options,args) :
                     hist = anaplot.GetVariableHistsFromTrees(trees_sp,keys_sp,treevar,weight,options)
                     if hist :
                         singlephoton_hists.append(hist[0])
-                        singlephoton_hists[-1].SetTitle('Single photon')
+                        singlephoton_hists[-1].SetTitle('Inclusive photons (fudged)')
                         singlephoton_hists[-1].SetLineColor(ROOT.kRed+1)
                         singlephoton_hists[-1].SetLineWidth(2)
 
                     # Get the cut values
-                    for id in ['tight','loose'] :
-                        conf_item = '%s_photons%s'%(var,status)
-                        cut_value = confs[id].GetValue(conf_item,'')
-                        if not cut_value :
+                    for id in ['tight','loose','menu3'] :
+                        cut_value = idhelpers.GetCutValueFromConf(confs[id],var,status,et,eta)
+                        if cut_value == None :
                             continue
-                        cut_value = ''.join(list(a if not i%2 else '' for i,a in enumerate(cut_value.split('#'))))
-                        try :
-                            cut_value = cut_value.split(';')[et*9 + eta] # Et-dependent
-                        except IndexError :
-                            cut_value = cut_value.split(';')[eta] # Et-independent
-                        cut_value = float(cut_value.rstrip().lstrip())
                         cuts_graphs[id].SetPoint(et*2  ,cut_value,et  )
                         cuts_graphs[id].SetPoint(et*2+1,cut_value,et+1)
 
@@ -180,6 +185,8 @@ def main(options,args) :
                     ShowerShapeEvolutionPlot(can,labels,radz_hists,singlephoton_hists)
                     plotfunc.AddHistogram(can,cuts_graphs['loose'],drawopt='l')
                     plotfunc.AddHistogram(can,cuts_graphs['tight'],drawopt='l')
+                    if options.menu3 :
+                        plotfunc.AddHistogram(can,cuts_graphs['menu3'],drawopt='l')
                     plotfunc.SetAxisLabels(can,variables[var][4],'')
                     plotfunc.SetLeftMargin(can,0.33)
                     plotfunc.MakeLegend(can,0.7,0.88,0.9,0.99,totalentries=3)
@@ -202,6 +209,8 @@ def main(options,args) :
                     ShowerShapeEvolutionPlot(pads[-1],labels,radz_hists,singlephoton_hists)
                     plotfunc.AddHistogram(pads[-1],cuts_graphs['loose'],drawopt='l')
                     plotfunc.AddHistogram(pads[-1],cuts_graphs['tight'],drawopt='l')
+                    if options.menu3 :
+                        plotfunc.AddHistogram(pads[-1],cuts_graphs['menu3'],drawopt='l')
                     if not eta1 :
                         plotfunc.SetLeftMargin(pads[-1],0.33)
                     if eta1 :
@@ -260,6 +269,7 @@ if __name__ == '__main__':
     p = OptionParser()
     p.add_option('--tight',type = 'string', default = '', dest = 'tight',help = 'Tight Menu')
     p.add_option('--loose' ,type = 'string', default = '', dest = 'loose' ,help = 'Loose Menu' )
+    p.add_option('--menu3' ,type = 'string', default = '', dest = 'menu3' ,help = 'Another Menu' )
 
     p.add_option('--radzsignal'  ,type = 'string', default = '', dest = 'radzsignal' ,help = 'Radiative-Z Signal file' )
     p.add_option('--radztreename',type = 'string', default = 'output', dest = 'radztreename' ,help = 'Radiative-Z treename' )
