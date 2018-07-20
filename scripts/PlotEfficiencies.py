@@ -75,14 +75,16 @@ def main(options,args) :
 
         args = len(et_bins)-1,array('d',list(a/1000. for a in et_bins)),len(eta_bins)-1,array('d',eta_bins)
         numerator_rz = ROOT.TH2F('numerator_%s_%s'%(status,'radz'),'Z#rightarrow^{}ll#gamma MC (fudged)',*args)
-        numerator_sp = ROOT.TH2F('numerator_%s_%s'%(status,'incl'),'Inclusive photons MC (fudged)',*args)
         denominator_rz = ROOT.TH2F('denominator_%s_%s'%(status,'radz'),'Z#rightarrow^{}ll#gamma MC (fudged)',*args)
-        denominator_sp = ROOT.TH2F('denominator_%s_%s'%(status,'incl'),'Inclusive photons MC (fudged)',*args)
+
+        numerator_sp = ROOT.TH2F('numerator_%s_%s'%(status,'incl'),'Inclusive #gamma MC (fudged)',*args)
+        denominator_sp = ROOT.TH2F('denominator_%s_%s'%(status,'incl'),'Inclusive #gamma MC (fudged)',*args)
 
         for et in range(len(et_bins)-1) :
             for eta in range(len(eta_bins)-1) :
                 phasespace_cuts = []
-                id_cuts = []
+                id_cuts_rz = []
+                id_cuts_sp = []
 
                 phasespace_cuts.append('ph.pt > %2.1f'%(et_bins[et]))
                 phasespace_cuts.append('ph.pt < %2.1f'%(et_bins[et+1]))
@@ -98,11 +100,20 @@ def main(options,args) :
                     cut_value = idhelpers.GetCutValueFromConf(confs['tight'],var,status,et,eta)
                     if cut_value == None :
                         continue
-                    id_cuts.append('%s %s %s'%(variables[var][0],variables[var][2],cut_value))
+                    id_cuts_rz.append('%s %s %s'%(variables[var][0],variables[var][2],cut_value))
+                    id_cuts_sp.append('%s %s %s'%(variables[var][1],variables[var][2],cut_value))
 
                 # options for the histogram-getter function
                 options.limits = dict()
                 options.limits['fabs(ph.eta2)'] = [1,0,5]
+                options.limits['fabs(y_eta_cl_s2)'] = [1,0,5]
+
+                def FillHistograms(varhist,hist2d) :
+                    Ntotal = varhist.Integral(0,varhist.GetNbinsX()+1)
+                    Dtotal = math.sqrt(sum(list(varhist.GetSumw2())))
+                    hist2d.SetBinContent(et+1,eta+1,Ntotal)
+                    hist2d.SetBinError  (et+1,eta+1,Dtotal)
+                    return
 
                 # First, Radiative-Z
                 # Get the denominator number
@@ -110,42 +121,70 @@ def main(options,args) :
                 weight = (weight_radz+'*(%s)'%(' && '.join(phasespace_cuts))).lstrip('*')
                 hist = anaplot.GetVariableHistsFromTrees(trees_rz,keys_rz,'fabs(ph.eta2)',weight,options)
                 if hist :
-                    hist = hist[0]
-                    Ntotal = hist.Integral(0,hist.GetNbinsX()+1)
-                    Dtotal = math.sqrt(sum(list(hist.GetSumw2())))
-                    denominator_rz.SetBinContent(et+1,eta+1,Ntotal)
-                    denominator_rz.SetBinError  (et+1,eta+1,Dtotal)
+                    FillHistograms(hist[0],denominator_rz)
 
                 # Get the numerator number
-                weight = (weight_radz+'*(%s)'%(' && '.join(phasespace_cuts + id_cuts))).lstrip('*')
+                weight = (weight_radz+'*(%s)'%(' && '.join(phasespace_cuts + id_cuts_rz))).lstrip('*')
                 hist = anaplot.GetVariableHistsFromTrees(trees_rz,keys_rz,'fabs(ph.eta2)',weight,options)
                 if hist :
-                    hist = hist[0]
-                    Npass = hist.Integral(0,hist.GetNbinsX()+1)
-                    Dpass = math.sqrt(sum(list(hist.GetSumw2())))
-                    numerator_rz.SetBinContent(et+1,eta+1,Npass)
-                    numerator_rz.SetBinError  (et+1,eta+1,Dpass)
+                    FillHistograms(hist[0],numerator_rz)
 
+                # Now Single-photon
+                for i in range(len(phasespace_cuts)) :
+                    phasespace_cuts[i] = phasespace_cuts[i].replace('ph.pt'      ,'y_pt*1000.' )
+                    phasespace_cuts[i] = phasespace_cuts[i].replace('ph.eta2'    ,'y_eta_cl_s2')
+                    phasespace_cuts[i] = phasespace_cuts[i].replace('ph.convFlag','y_convType' )
+                phasespace_cuts.append('y_isTruthMatchedPhoton == 1')
+
+                weight_singlephoton = 'mcTotWeightNoPU_PIDuse'
+                weight = (weight_singlephoton+'*(%s)'%(' && '.join(phasespace_cuts))).lstrip('*')
+                hist = anaplot.GetVariableHistsFromTrees(trees_sp,keys_sp,'fabs(y_eta_cl_s2)',weight,options)
+                if hist :
+                    FillHistograms(hist[0],denominator_sp)
+
+                weight = (weight_singlephoton+'*(%s)'%(' && '.join(phasespace_cuts + id_cuts_sp))).lstrip('*')
+                hist = anaplot.GetVariableHistsFromTrees(trees_sp,keys_sp,'fabs(y_eta_cl_s2)',weight,options)
+                if hist :
+                    FillHistograms(hist[0],numerator_sp)
 
             ## End eta block
         ## End Et block
 
         can2d = ROOT.TCanvas('can2d_%s'%(status),'blah',600,500);
         numerator_rz.Divide(numerator_rz,denominator_rz,1,1,'B')
-        numerator_rz.Draw('colz')
+        numerator_sp.Divide(numerator_sp,denominator_sp,1,1,'B')
+        #numerator_rz.Draw('colz')
 
         can = ROOT.TCanvas('can_pt_%s'%(status),'blah',600,700);
         pads = []
-        hists = []
+        hists_rz = []
+        hists_sp = []
+
         bm = 0.08 # bottom margin
         padheight = (1-bm-0.04)/float(len(eta_bins)-2)
         for eta in range(len(eta_bins)-1) :
             if eta == 4 : continue
             eta1 = eta - 1*(eta>4)
             pads.append(ROOT.TPad('pad_eta%d','blah',0,bm*(eta1>0) + eta1*padheight,1, bm + (eta1+1)*padheight))
-            name = numerator_rz.GetName()+'_eta%d'%(eta+1)
-            numerator_rz.ProjectionX(name,eta+1,eta+1)
-            hists.append(ROOT.gDirectory.Get(name))
+
+            current_hists = []
+
+            # Radiative-Z: Project onto x-axis (Et)
+            if options.radzsignal :
+                name = numerator_rz.GetName()+'_eta%d'%(eta+1)
+                numerator_rz.ProjectionX(name,eta+1,eta+1)
+                hists_rz.append(ROOT.gDirectory.Get(name))
+                current_hists.append(hists_rz[-1])
+
+            # Single-photon: Project onto x-axis (Et)
+            if options.singlephotonsignal :
+                name = numerator_sp.GetName()+'_eta%d'%(eta+1)
+                numerator_sp.ProjectionX(name,eta+1,eta+1)
+                hists_sp.append(ROOT.gDirectory.Get(name))
+                hists_sp[-1].SetMarkerColor(ROOT.kRed+1)
+                hists_sp[-1].SetLineColor(ROOT.kRed+1)
+                current_hists.append(hists_sp[-1])
+
 
             drawopt = 'pE'
             if eta1 > 0 :
@@ -157,22 +196,27 @@ def main(options,args) :
             if eta1 == 6 :
                 drawopt = 'pEX+'
 
-            pads[-1].cd()
-            hists[-1].Draw(drawopt)
-            hists[-1].SetDrawOption(drawopt)
+            for h in current_hists :
+                plotfunc.AddHistogram(pads[-1],h,drawopt)
+
             plotfunc.FormatCanvasAxes(pads[-1])
 
-            hists[-1].SetMarkerSize(0.6)
-            hists[-1].GetYaxis().SetRangeUser(.4001,0.999)
-            hists[-1].GetYaxis().SetNdivisions(5,2,0)
-            hists[-1].GetYaxis().SetTitleSize(16)
-            hists[-1].GetYaxis().SetTitleOffset(2.3)
-            hists[-1].GetXaxis().SetTitleOffset(5.2)
+            for h in list(pads[-1].GetListOfPrimitives()) :
+                if not issubclass(type(h),ROOT.TH1) :
+                    continue
+
+                h.SetMarkerSize(0.6)
+                h.GetYaxis().SetRangeUser(.4001,0.999)
+                h.GetYaxis().SetNdivisions(5,2,0)
+                h.GetYaxis().SetTitleSize(16)
+                h.GetYaxis().SetTitleOffset(2.3)
+                h.GetXaxis().SetTitleOffset(5.2)
+
+                if eta1 != 0 and eta1 != 6 :
+                    h.GetXaxis().SetTickLength(0)
+
             can.cd()
             pads[-1].Draw()
-
-            if eta1 != 0 and eta1 != 6 :
-                hists[-1].GetXaxis().SetTickLength(0)
 
             tmpy = '|#eta|^{ }#in^{ }' if eta == 0 else ''
             yaxis_label = '%s[%.2f,%.2f]'%(tmpy,eta_bins[eta],eta_bins[eta+1])
@@ -183,14 +227,17 @@ def main(options,args) :
                 # some plot text
                 text_lines = [plotfunc.GetAtlasInternalText()]
                 text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
-                plotfunc.DrawText(pads[-1],text_lines,0.65,0.1,0.9,0.55,totalentries=2)
+                plotfunc.DrawText(pads[-1],text_lines,0.65,0.05,0.9,0.55,totalentries=2)
             if eta == 0 :
                 # Legend
-                plotfunc.MakeLegend(pads[-1],.65,.6,.7,.7,option='pE',totalentries=1)
+                plotfunc.MakeLegend(pads[-1],.57,.47,.7,.75,option='pE',totalentries=1)
 
         status1 = 'Converted' if status == 'Converted' else 'Unconverted'
-        text_lines2 = ['%s photons'%(status)]
-        plotfunc.DrawText(can,text_lines2,0.71,0.96,0.91,0.99,totalentries=1)
+        text = ROOT.TLatex()
+        text.SetTextFont(43)
+        text.SetTextSize(18)
+        text.SetTextAlign(31)
+        text.DrawLatex(0.95,0.97,status1)
         can.Update()
         can.Print('Efficiency_PtDependent_%s.pdf'%(status))
 
