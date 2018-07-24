@@ -16,6 +16,9 @@ genericUtils_path = '%s/genericUtils'%(the_path)
 print 'Adding %s to PYTHONPATH.'%(genericUtils_path)
 sys.path.append(genericUtils_path)
 
+ROOT.gROOT.SetMacroPath('%s:%s/share'%(ROOT.gROOT.GetMacroPath(),the_path))
+ROOT.gROOT.LoadMacro('CutsMacro.h')
+
 ROOT.gROOT.SetBatch(True)
 
 import python.PlotFunctions as plotfunc
@@ -64,13 +67,19 @@ def main(options,args) :
 
         # Assume for now that Strips and non-strips binning is the same
         et_bins = confs['tight'].GetValue('CutBinEnergy_photons%s'%(status),'').split(';')
-        et_bins = list(float(a.rstrip().lstrip()) for a in et_bins)
-        et_bins = [10000] + et_bins
-        tmp = []
-        for i in et_bins :
-            if i < 100000.1 :
-                tmp.append(i)
-        et_bins = tmp
+        if ''.join(et_bins) :
+            et_bins = list(float(a.rstrip().lstrip()) for a in et_bins)
+            # Add first bin, 10 GeV
+            et_bins = [10000] + et_bins
+            # Remove all bins above 100 GeV
+            for et in range(len(et_bins)-1,-1,-1) :
+                if et_bins[et] > 100000.1 :
+                    et_bins.pop(et)
+            # Add 100 GeV bin threshold
+            if int(et_bins[-1]) != 100000 :
+                et_bins = et_bins + [100000]
+        else :
+            et_bins = [10000,15000,20000,25000,30000,35000,40000,45000,50000,60000,80000,100000]
         print et_bins
 
         args = len(et_bins)-1,array('d',list(a/1000. for a in et_bins)),len(eta_bins)-1,array('d',eta_bins)
@@ -80,82 +89,68 @@ def main(options,args) :
         numerator_sp = ROOT.TH2F('numerator_%s_%s'%(status,'incl'),'Inclusive #gamma MC (fudged)',*args)
         denominator_sp = ROOT.TH2F('denominator_%s_%s'%(status,'incl'),'Inclusive #gamma MC (fudged)',*args)
 
-        for et in range(len(et_bins)-1) :
-            for eta in range(len(eta_bins)-1) :
-                phasespace_cuts = []
-                id_cuts_rz = []
-                id_cuts_sp = []
+        # Test code - for fixing up the plot cosmetics:
+        if options.cosmetics :
 
-                phasespace_cuts.append('ph.pt > %2.1f'%(et_bins[et]))
-                phasespace_cuts.append('ph.pt < %2.1f'%(et_bins[et+1]))
-                phasespace_cuts.append('fabs(ph.eta2) > %2.2f'%(eta_bins[eta]))
-                phasespace_cuts.append('fabs(ph.eta2) < %2.2f'%(eta_bins[eta+1]))
-                if status == 'Converted' :
-                    phasespace_cuts.append('ph.convFlag > 0')
-                else :
-                    phasespace_cuts.append('ph.convFlag == 0')
+            # TRandom3 used for plot cosmetics test code
+            rand = ROOT.TRandom3()
 
-                for var in variables.keys() :
-                    # Get the cut values
-                    cut_value = idhelpers.GetCutValueFromConf(confs['tight'],var,status,et,eta)
-                    if cut_value == None :
-                        continue
-                    id_cuts_rz.append('%s %s %s'%(variables[var][0],variables[var][2],cut_value))
-                    id_cuts_sp.append('%s %s %s'%(variables[var][1],variables[var][2],cut_value))
+            for et in range(len(et_bins)-1) :
+                for eta in range(len(eta_bins)-1) :
 
-                # options for the histogram-getter function
-                options.limits = dict()
-                options.limits['fabs(ph.eta2)'] = [1,0,5]
-                options.limits['fabs(y_eta_cl_s2)'] = [1,0,5]
+                    if options.radzsignal :
+                        passing = rand.Poisson(1000)
+                        failing = rand.Poisson(100)
+                        denominator_rz.SetBinContent(et+1,eta+1,passing+failing)
+                        denominator_rz.SetBinError  (et+1,eta+1,0.01)
+                        numerator_rz.SetBinContent  (et+1,eta+1,passing)
+                        numerator_rz.SetBinError    (et+1,eta+1,0.01)
 
-                def FillHistograms(varhist,hist2d) :
-                    Ntotal = varhist.Integral(0,varhist.GetNbinsX()+1)
-                    Dtotal = math.sqrt(sum(list(varhist.GetSumw2())))
-                    hist2d.SetBinContent(et+1,eta+1,Ntotal)
-                    hist2d.SetBinError  (et+1,eta+1,Dtotal)
-                    return
-
-                # First, Radiative-Z
-                # Get the denominator number
-                weight_radz = 'mc_weight.pu*mc_weight.gen'
-                weight = (weight_radz+'*(%s)'%(' && '.join(phasespace_cuts))).lstrip('*')
-                hist = anaplot.GetVariableHistsFromTrees(trees_rz,keys_rz,'fabs(ph.eta2)',weight,options)
-                if hist :
-                    FillHistograms(hist[0],denominator_rz)
-
-                # Get the numerator number
-                weight = (weight_radz+'*(%s)'%(' && '.join(phasespace_cuts + id_cuts_rz))).lstrip('*')
-                hist = anaplot.GetVariableHistsFromTrees(trees_rz,keys_rz,'fabs(ph.eta2)',weight,options)
-                if hist :
-                    FillHistograms(hist[0],numerator_rz)
-
-                # Now Single-photon
-                for i in range(len(phasespace_cuts)) :
-                    phasespace_cuts[i] = phasespace_cuts[i].replace('ph.pt'      ,'y_pt*1000.' )
-                    phasespace_cuts[i] = phasespace_cuts[i].replace('ph.eta2'    ,'y_eta_cl_s2')
-                    phasespace_cuts[i] = phasespace_cuts[i].replace('ph.convFlag','y_convType' )
-                phasespace_cuts.append('y_isTruthMatchedPhoton == 1')
-
-                weight_singlephoton = 'mcTotWeightNoPU_PIDuse'
-                weight = (weight_singlephoton+'*(%s)'%(' && '.join(phasespace_cuts))).lstrip('*')
-                hist = anaplot.GetVariableHistsFromTrees(trees_sp,keys_sp,'fabs(y_eta_cl_s2)',weight,options)
-                if hist :
-                    FillHistograms(hist[0],denominator_sp)
-
-                weight = (weight_singlephoton+'*(%s)'%(' && '.join(phasespace_cuts + id_cuts_sp))).lstrip('*')
-                hist = anaplot.GetVariableHistsFromTrees(trees_sp,keys_sp,'fabs(y_eta_cl_s2)',weight,options)
-                if hist :
-                    FillHistograms(hist[0],numerator_sp)
+                    if options.singlephotonsignal :
+                        passing = rand.Poisson(1000)
+                        failing = rand.Poisson(100)
+                        denominator_sp.SetBinContent(et+1,eta+1,passing+failing)
+                        denominator_sp.SetBinError  (et+1,eta+1,0.01)
+                        numerator_sp.SetBinContent  (et+1,eta+1,passing)
+                        numerator_sp.SetBinError    (et+1,eta+1,0.01)
 
             ## End eta block
         ## End Et block
+
+        # general setup of tight ID menu
+        n_et_tight  = 1+len(confs['tight'].GetValue('CutBinEnergy_photons%s'%(status),'').split(';'))
+        n_eta_tight = len(confs['tight'].GetValue('CutBinEta_photons%s'%(status),'').split(';'))
+        tight_id = ROOT.photonID(n_et_tight,n_eta_tight)
+
+        for var in variables.keys() :
+            cut_values = idhelpers.GetCutValuesFromConf(confs['tight'],var,status)
+            cut_values = array('d',cut_values)
+            getattr(tight_id,'Set_%s'%(var))(cut_values)
+
+        # New Radiative-Z efficiency method:
+        if options.radzsignal :
+            print 'Evaluating Radiative-Z signal ID...'
+            ROOT.EvaluatePhotonID_InclusivePhoton(trees_rz[keys_rz[0]],
+                                                  tight_id,
+                                                  status == 'Converted',
+                                                  denominator_rz,
+                                                  numerator_rz)
+
+        # New Single Photon efficiency method:
+        if options.singlephotonsignal :
+            print 'Evaluating Single-photon signal ID...'
+            ROOT.EvaluatePhotonID_InclusivePhoton(trees_sp[keys_sp[0]],
+                                                  tight_id,
+                                                  status == 'Converted',
+                                                  denominator_sp,
+                                                  numerator_sp)
 
         can2d = ROOT.TCanvas('can2d_%s'%(status),'blah',600,500);
         numerator_rz.Divide(numerator_rz,denominator_rz,1,1,'B')
         numerator_sp.Divide(numerator_sp,denominator_sp,1,1,'B')
         #numerator_rz.Draw('colz')
 
-        can = ROOT.TCanvas('can_pt_%s'%(status),'blah',600,700);
+        can = ROOT.TCanvas('can_pt_%s'%(status),'blah',600,900);
         pads = []
         hists_rz = []
         hists_sp = []
@@ -207,7 +202,7 @@ def main(options,args) :
 
                 h.SetMarkerSize(0.6)
                 h.GetYaxis().SetRangeUser(.4001,0.999)
-                h.GetYaxis().SetNdivisions(5,2,0)
+                h.GetYaxis().SetNdivisions(5,5,0)
                 h.GetYaxis().SetTitleSize(16)
                 h.GetYaxis().SetTitleOffset(2.3)
                 h.GetXaxis().SetTitleOffset(5.2)
@@ -239,7 +234,9 @@ def main(options,args) :
         text.SetTextAlign(31)
         text.DrawLatex(0.95,0.97,status1)
         can.Update()
-        can.Print('Efficiency_PtDependent_%s.pdf'%(status))
+        if not os.path.exists('%s'%(options.outdir)) :
+            os.makedirs('%s'%(options.outdir))
+        can.Print('%s/Efficiency_VersusPt_%s.pdf'%(options.outdir,status))
 
     return
     
@@ -257,7 +254,10 @@ if __name__ == '__main__':
     p.add_option('--singlephotonsignal'  ,type = 'string', default = '', dest = 'singlephotonsignal' ,help = 'Single photon Signal file' )
     p.add_option('--singlephotontreename',type = 'string', default = 'SinglePhoton', dest = 'singlephotontreename' ,help = 'Single photon treename' )
 
+    p.add_option('--outdir',type='string',default='.',dest='outdir',help='output directory')
+
+    p.add_option('--cosmetics',action='store_true',default=False,dest='cosmetics',help='For fixing plot cosmetics')
+
     options,args = p.parse_args()
     
     main(options,args)
-
