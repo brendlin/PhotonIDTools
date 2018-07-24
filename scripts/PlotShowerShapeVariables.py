@@ -15,6 +15,9 @@ genericUtils_path = '%s/genericUtils'%(the_path)
 print 'Adding %s to PYTHONPATH.'%(genericUtils_path)
 sys.path.append(genericUtils_path)
 
+ROOT.gROOT.SetMacroPath('%s:%s/share'%(ROOT.gROOT.GetMacroPath(),the_path))
+ROOT.gROOT.LoadMacro('CutsMacro.h')
+
 ROOT.gROOT.SetBatch(True)
 
 import python.PlotFunctions as plotfunc
@@ -23,37 +26,23 @@ import python.PyAnalysisPlotting as anaplot
 from python.ShowerShapeEvolutionPlotter import ShowerShapeEvolutionPlot
 import PhotonIDHelpers as idhelpers
 
-variables = {
-#     'ph.e277'      ,
-#     'ph.f1'        ,
-    'CutHadLeakage':['ph.rhad*(0.8 < fabs(ph.eta2) && fabs(ph.eta2) < 1.37) + ph.rhad1*(!(0.8 < fabs(ph.eta2) && fabs(ph.eta2) < 1.37))',
-                     'y_Rhad*(0.8 < fabs(y_eta_cl_s2) && fabs(y_eta_cl_s2) < 1.37) + y_Rhad1*(!(0.8 < fabs(y_eta_cl_s2) && fabs(y_eta_cl_s2) < 1.37))',-0.03,0.07,'R_{Had}'],
-    'Reta37'       :['ph.reta'      ,'y_Reta'  ,   0.80,    1.01,'R_{#eta}'    ],
-    'Rphi33'       :['ph.rphi'      ,'y_Rphi'  ,   0.45,     1.0,'R_{#phi}'    ],
-    'weta2'        :['ph.weta2'     ,'y_weta2' , 0.0065, 0.01599,'W_{#eta^{}2}'],
-    'fracm'        :['ph.fside'     ,'y_fracs1',  0.001,   0.799,'f_{side}'    ],
-    'wtot'         :['ph.wstot'     ,'y_wtots1',      1,   4.999,'W_{stot}'    ],
-    'w1'           :['ph.w1'        ,'y_weta1' ,   0.45,    0.85,'W_{s3}'      ],
-    'deltae'       :['ph.deltae'    ,'y_deltae', 0.0001,   799.9,'#Delta^{}E'  ],
-    'DEmaxs1'      :['ph.eratio'    ,'y_Eratio', 0.6001,   1.049,'E_{ratio}'   ],
-    }
-
 #-----------------------------------------------
 def main(options,args) :
 
     plotfunc.SetupStyle()
+    options.names = options.names.split(',')
 
     confs = dict()
-    for confstr in ['tight','loose','menu3'] :
+    for confstr in ['tight','loose','menu3','menu4'] :
         print 'Using %s for %s'%(getattr(options,confstr),confstr)
         confs[confstr] = ROOT.TEnv(getattr(options,confstr))
 
     for status in ['Converted','NonConverted'] :
 
-        if status == 'NonConverted' :
-            variables['Rphi33'][2] = 0.75
-
         print 'Making plots for %s'%(status)
+
+        files_rz,trees_rz,keys_rz = anaplot.GetTreesFromFiles(options.radzsignal,treename=options.radztreename)
+        files_sp,trees_sp,keys_sp = anaplot.GetTreesFromFiles(options.singlephotonsignal,treename=options.singlephotontreename)
 
         # Assume for now that Strips and non-strips binning is the same
         eta_bins = confs['tight'].GetValue('CutBinEta_photons%s'%(status),'').split(';')
@@ -64,7 +53,7 @@ def main(options,args) :
         # Assume for now that Strips and non-strips binning is the same
         et_bins = confs['tight'].GetValue('CutBinEnergy_photons%s'%(status),'').split(';')
         et_bins = list(float(a.rstrip().lstrip()) for a in et_bins)
-        et_bins = [0] + et_bins
+        et_bins = [10000] + et_bins
         tmp = []
         for i in et_bins :
             if i < 100000.1 :
@@ -72,7 +61,49 @@ def main(options,args) :
         et_bins = tmp
         print et_bins
 
-        for var in variables.keys() :
+        args = len(et_bins)-1,array('d',list(a/1000. for a in et_bins)),len(eta_bins)-1,array('d',eta_bins)
+        numerator_rz   = ROOT.TH2F('numerator_%s_%s'  %(status,'radz'),'Z#rightarrow^{}ll#gamma MC (fudged)',*args)
+        denominator_rz = ROOT.TH2F('denominator_%s_%s'%(status,'radz'),'Z#rightarrow^{}ll#gamma MC (fudged)',*args)
+
+        numerator_sp   = ROOT.TH2F('numerator_%s_%s'  %(status,'incl'),'Inclusive #gamma MC (fudged)'       ,*args)
+        denominator_sp = ROOT.TH2F('denominator_%s_%s'%(status,'incl'),'Inclusive #gamma MC (fudged)'       ,*args)
+
+        variables_rz = ROOT.photonVariables('RadZ_%s'        %(status),numerator_rz.GetNbinsX(),numerator_rz.GetNbinsY(),status == 'Converted')
+        variables_sp = ROOT.photonVariables('SinglePhoton_%s'%(status),numerator_sp.GetNbinsX(),numerator_sp.GetNbinsY(),status == 'Converted')
+
+        # general setup of tight ID menu
+        n_et_tight  = 1+len(confs['tight'].GetValue('CutBinEnergy_photons%s'%(status),'').split(';'))
+        n_eta_tight = len(confs['tight'].GetValue('CutBinEta_photons%s'%(status),'').split(';'))
+        tight_id = ROOT.photonID(n_et_tight,n_eta_tight)
+
+        for var in list(variables_rz.variables) :
+            cut_values = idhelpers.GetCutValuesFromConf(confs['tight'],var,status)
+            cut_values = array('d',cut_values)
+            getattr(tight_id,'Set_%s'%(var))(cut_values)
+
+        # New Radiative-Z efficiency method:
+        if options.radzsignal :
+            print 'Evaluating Radiative-Z signal ID...'
+            ROOT.EvaluatePhotonID_InclusivePhoton(trees_rz[keys_rz[0]],
+                                                  tight_id,
+                                                  status == 'Converted',
+                                                  denominator_rz,
+                                                  numerator_rz,
+                                                  variables_rz)
+
+        # New Single Photon efficiency method:
+        if options.singlephotonsignal :
+            print 'Evaluating Single-photon signal ID...'
+            ROOT.EvaluatePhotonID_InclusivePhoton(trees_sp[keys_sp[0]],
+                                                  tight_id,
+                                                  status == 'Converted',
+                                                  denominator_sp,
+                                                  numerator_sp,
+                                                  variables_sp)
+
+
+        # Process the cuts and the histograms
+        for var in list(variables_rz.variables) :
 
             # Reset PlotFunctions tobject_collector
             del plotfunc.tobject_collector[:]
@@ -80,9 +111,6 @@ def main(options,args) :
             can_barrel = ROOT.TCanvas('can_%s_%s_barrel'%(var,status),'blah',int(1464),700)
             can_endcap = ROOT.TCanvas('can_%s_%s_endcap'%(var,status),'blah',int(1464),700)
             pads = []
-
-            files_rz,trees_rz,keys_rz = anaplot.GetTreesFromFiles(options.radzsignal,treename=options.radztreename)
-            files_sp,trees_sp,keys_sp = anaplot.GetTreesFromFiles(options.singlephotonsignal,treename=options.singlephotontreename)
 
             for eta in range(len(eta_bins)-1) :
 
@@ -102,72 +130,50 @@ def main(options,args) :
                                          array('d',[0]*(2*len(et_bins)-2)))
                     tmp_gr.SetTitle(gr_title)
                     tmp_gr.SetName('%s_%s_%s_%d'%(gr_title.replace(' ','_'),var,status,eta))
-                    tmp_gr.SetLineWidth(2)
+                    tmp_gr.SetLineWidth(1)
                     return tmp_gr
 
                 cuts_graphs = dict()
 
+                names = ['Tight','Loose','Menu3','Menu4']
+                for ii in range(len(options.names)) :
+                    names[ii] = options.names[ii]
+
                 # Tight cuts graph
-                cuts_graphs['tight'] = GetCutsGraph('Tight cuts')
+                cuts_graphs['tight'] = GetCutsGraph(names[0])
                 cuts_graphs['tight'].SetLineColor(ROOT.kBlue+1)
 
                 # Loose cuts graph
-                cuts_graphs['loose'] = GetCutsGraph('Loose cuts')
+                cuts_graphs['loose'] = GetCutsGraph(names[1])
                 cuts_graphs['loose'].SetLineColor(ROOT.kOrange+5)
+                cuts_graphs['loose'].SetLineWidth(2)
 
                 # menu 3 graph
-                cuts_graphs['menu3'] = GetCutsGraph('Old Tight')
-                cuts_graphs['menu3'].SetLineColor(ROOT.kGray+1)
+                cuts_graphs['menu3'] = GetCutsGraph(names[2])
+                cuts_graphs['menu3'].SetLineColor(ROOT.kGray+2)
+                cuts_graphs['menu3'].SetLineStyle(2)
+
+                # menu 4 graph
+                cuts_graphs['menu4'] = GetCutsGraph(names[3])
+                cuts_graphs['menu4'].SetLineColor(ROOT.kGreen+1)
+                cuts_graphs['menu4'].SetLineStyle(7)
 
                 for et in range(len(et_bins)-1) :
 
-                    cuts = []
-                    cuts.append('ph.pt > %2.1f'%(et_bins[et]))
-                    cuts.append('ph.pt < %2.1f'%(et_bins[et+1]))
-                    cuts.append('fabs(ph.eta2) > %2.2f'%(eta_bins[eta]))
-                    cuts.append('fabs(ph.eta2) < %2.2f'%(eta_bins[eta+1]))
-                    if status == 'Converted' :
-                        cuts.append('ph.convFlag > 0')
-                    else :
-                        cuts.append('ph.convFlag == 0')
-
-                    weight_radz = 'mc_weight.pu*mc_weight.gen'
-                    weight = (weight_radz+'*(%s)'%(' && '.join(cuts))).lstrip('*')
-                    treevar = variables[var][0]
-
-                    # Needed to pass options to histogram-getter function
-                    options.limits = dict()
-                    options.limits[treevar] = [100,variables[var][2],variables[var][3]]
-
-                    # Get the histogram (Rad-Z)
-                    hist = anaplot.GetVariableHistsFromTrees(trees_rz,keys_rz,treevar,weight,options)
-                    if hist :
-                        radz_hists.append(hist[0])
+                    if options.radzsignal :
+                        radz_hists.append(getattr(variables_rz,'h_%s'%(var))[et*variables_rz.neta + eta])
                         radz_hists[-1].SetTitle('Z#rightarrow^{}ll#gamma MC (fudged)')
                         radz_hists[-1].SetLineColor(ROOT.kBlack)
                         radz_hists[-1].SetLineWidth(2)
 
-                    # Switch to SinglePhoton inputs
-                    for i in range(len(cuts)) :
-                        cuts[i] = cuts[i].replace('ph.pt'      ,'y_pt*1000.' )
-                        cuts[i] = cuts[i].replace('ph.eta2'    ,'y_eta_cl_s2')
-                        cuts[i] = cuts[i].replace('ph.convFlag','y_convType' )
-                    cuts.append('y_isTruthMatchedPhoton == 1')
-                    weight_singlephoton = 'mcTotWeightNoPU_PIDuse'
-                    weight = (weight_singlephoton+'*(%s)'%(' && '.join(cuts))).lstrip('*')
-                    treevar = variables[var][1]
-                    options.limits[treevar] = [100,variables[var][2],variables[var][3]]
-
-                    # Get the histogram (Single-photon)
-                    hist = anaplot.GetVariableHistsFromTrees(trees_sp,keys_sp,treevar,weight,options)
-                    if hist :
-                        singlephoton_hists.append(hist[0])
+                    if options.singlephotonsignal :
+                        singlephoton_hists.append(getattr(variables_sp,'h_%s'%(var))[et*variables_sp.neta + eta])
                         singlephoton_hists[-1].SetTitle('Inclusive photons (fudged)')
                         singlephoton_hists[-1].SetLineColor(ROOT.kRed+1)
                         singlephoton_hists[-1].SetLineWidth(2)
 
                     # Get the cut values
-                    for id in ['tight','loose','menu3'] :
+                    for id in ['tight','loose','menu3','menu4'] :
                         cut_value = idhelpers.GetCutValueFromConf(confs[id],var,status,et,eta)
                         if cut_value == None :
                             continue
@@ -187,7 +193,8 @@ def main(options,args) :
                     plotfunc.AddHistogram(can,cuts_graphs['tight'],drawopt='l')
                     if options.menu3 :
                         plotfunc.AddHistogram(can,cuts_graphs['menu3'],drawopt='l')
-                    plotfunc.SetAxisLabels(can,variables[var][4],'')
+                    if options.menu4 :
+                        plotfunc.AddHistogram(can,cuts_graphs['menu4'],drawopt='l')
                     plotfunc.SetLeftMargin(can,0.33)
                     plotfunc.MakeLegend(can,0.7,0.88,0.9,0.99,totalentries=3)
 
@@ -211,6 +218,8 @@ def main(options,args) :
                     plotfunc.AddHistogram(pads[-1],cuts_graphs['tight'],drawopt='l')
                     if options.menu3 :
                         plotfunc.AddHistogram(pads[-1],cuts_graphs['menu3'],drawopt='l')
+                    if options.menu4 :
+                        plotfunc.AddHistogram(pads[-1],cuts_graphs['menu4'],drawopt='l')
                     if not eta1 :
                         plotfunc.SetLeftMargin(pads[-1],0.33)
                     if eta1 :
@@ -219,29 +228,37 @@ def main(options,args) :
                         plotfunc.SetRightMargin(pads[-1],0.01)
                     can_barrel.cd() if (eta < 5) else can_endcap.cd()
                     pads[-1].Draw()
-                    plotfunc.SetAxisLabels(pads[-1],variables[var][4],'')
                     taxisfunc.SetNdivisions(pads[-1],5,5,0)
                     for i in pads[-1].GetListOfPrimitives() :
-                        if hasattr(i,'SetLineWidth') :
+                        if hasattr(i,'SetLineWidth') and issubclass(type(i),ROOT.TH1) :
                             i.SetLineWidth(1)
                         if hasattr(i,'GetYaxis') :
                             i.GetYaxis().SetLabelSize(19)
                             i.GetXaxis().SetLabelSize(19)
+                        if issubclass(type(i),ROOT.TH1) and not eta1 :
+                            i.SetTitle('remove')
+                        if issubclass(type(i),ROOT.TGraph) and eta1 == 1 :
+                            i.SetTitle('remove')
+
                     if not eta1 :
                         plotfunc.MakeLegend(pads[-1],0.7,0.88,0.9,0.99,totalentries=3,option='l')
+                        pads[-1].GetPrimitive('legend').SetMargin(0.4)
                         plotfunc.DrawText(pads[-1],text_lines,0.33,0.88,0.5,0.99,totalentries=3)
                     else :
                         plotfunc.DrawText(pads[-1],['','',text_lines[-1]],0.01,0.88,0.5,0.99,totalentries=1)
                         if pads[-1].GetPrimitive('legend') :
                             pads[-1].GetPrimitive('legend').Delete()
 
+                    if eta1 == 1 :
+                        plotfunc.MakeLegend(pads[-1],0.01,0.93,0.5,0.99,totalentries=2,option='l')
+
                 ## end barrel / EC block
             ## end eta block
 
-            if not os.path.exists(status) :
-                os.makedirs(status)
-            can_barrel.Print('%s/barrel_%s_%s.pdf'%(status,var,status))
-            can_endcap.Print('%s/endcap_%s_%s.pdf'%(status,var,status))
+            if not os.path.exists('%s/%s'%(options.outdir,status)) :
+                os.makedirs('%s/%s'%(options.outdir,status))
+            can_barrel.Print('%s/%s/barrel_%s_%s.pdf'%(options.outdir,status,var,status))
+            can_endcap.Print('%s/%s/endcap_%s_%s.pdf'%(options.outdir,status,var,status))
 
             # Memory management
             for pad in list(can_barrel.GetListOfPrimitives()) :
@@ -254,10 +271,10 @@ def main(options,args) :
             ROOT.gROOT.ProcessLine('delete %s'%(can_barrel.GetName()))
             ROOT.gROOT.ProcessLine('delete %s'%(can_endcap.GetName()))
 
-            for i in files_rz.keys() :
-                files_rz[i].Close()
-            for i in files_sp.keys() :
-                files_sp[i].Close()
+        for i in files_rz.keys() :
+            files_rz[i].Close()
+        for i in files_sp.keys() :
+            files_sp[i].Close()
 
         ## end variable block
     ## end status block
@@ -270,12 +287,17 @@ if __name__ == '__main__':
     p.add_option('--tight',type = 'string', default = '', dest = 'tight',help = 'Tight Menu')
     p.add_option('--loose' ,type = 'string', default = '', dest = 'loose' ,help = 'Loose Menu' )
     p.add_option('--menu3' ,type = 'string', default = '', dest = 'menu3' ,help = 'Another Menu' )
+    p.add_option('--menu4' ,type = 'string', default = '', dest = 'menu4' ,help = 'Another Menu' )
+
+    p.add_option('--names',type = 'string', default = '', dest = 'names',help = 'Menu names, comma-separated (tight,loose,menu3,menu4')
 
     p.add_option('--radzsignal'  ,type = 'string', default = '', dest = 'radzsignal' ,help = 'Radiative-Z Signal file' )
     p.add_option('--radztreename',type = 'string', default = 'output', dest = 'radztreename' ,help = 'Radiative-Z treename' )
 
     p.add_option('--singlephotonsignal'  ,type = 'string', default = '', dest = 'singlephotonsignal' ,help = 'Single photon Signal file' )
     p.add_option('--singlephotontreename',type = 'string', default = 'SinglePhoton', dest = 'singlephotontreename' ,help = 'Single photon treename' )
+
+    p.add_option('--outdir',type='string',default='.',dest='outdir',help='output directory')
 
     options,args = p.parse_args()
     

@@ -1,4 +1,67 @@
 #include <vector>
+#include "TString.h"
+
+struct photonVariables
+{
+  photonVariables(const char* name,int n_et,int n_eta,bool isConv) {
+
+    net = n_et;
+    neta = n_eta;
+
+    variables.push_back("CutHadLeakage");
+    variables.push_back("Reta37"       );
+    variables.push_back("Rphi33"       );
+    variables.push_back("weta2"        );
+    variables.push_back("fracm"        );
+    variables.push_back("wtot"         );
+    variables.push_back("w1"           );
+    variables.push_back("deltae"       );
+    variables.push_back("DEmaxs1"      );
+
+    for (int et=0;et<n_et;et++) {
+      for (int eta=0;eta<n_eta;eta++) {
+        TString nm_tmp = Form("%s_%d_%d",name,et,eta);
+        const char* nm = nm_tmp.Data();
+        double rphi_lo = (isConv) ? 0.45 : 0.75;
+        h_CutHadLeakage.push_back(new TH1F(Form("CutHadLeakage_%s",nm),"CutHadLeakage",100,  -0.03,     0.07));
+        h_Reta37       .push_back(new TH1F(Form("Reta37_%s"       ,nm),"Reta37"       ,100,   0.80,    1.010));
+        h_Rphi33       .push_back(new TH1F(Form("Rphi33_%s"       ,nm),"Rphi33"       ,100,rphi_lo,     1.00));
+        h_weta2        .push_back(new TH1F(Form("weta2_%s"        ,nm),"weta2"        ,100, 0.0065, 0.015990));
+        h_fracm        .push_back(new TH1F(Form("fracm_%s"        ,nm),"fracm"        ,100,  0.001,   0.7990));
+        h_wtot         .push_back(new TH1F(Form("wtot_%s"         ,nm),"wtot"         ,100,      1,   4.9990));
+        h_w1           .push_back(new TH1F(Form("w1_%s"           ,nm),"w1"           ,100,   0.45,    0.850));
+        h_deltae       .push_back(new TH1F(Form("deltae_%s"       ,nm),"deltae"       ,100, 0.0001,   799.90));
+        h_DEmaxs1      .push_back(new TH1F(Form("DEmaxs1_%s"      ,nm),"DEmaxs1"      ,100, 0.6001,   1.0490));
+        h_CutHadLeakage.back()->GetXaxis()->SetTitle("R_{Had}"     );
+        h_Reta37       .back()->GetXaxis()->SetTitle("R_{#eta}"    );
+        h_Rphi33       .back()->GetXaxis()->SetTitle("R_{#phi}"    );
+        h_weta2        .back()->GetXaxis()->SetTitle("W_{#eta^{}2}");
+        h_fracm        .back()->GetXaxis()->SetTitle("f_{side}"    );
+        h_wtot         .back()->GetXaxis()->SetTitle("W_{stot}"    );
+        h_w1           .back()->GetXaxis()->SetTitle("W_{s3}"      );
+        h_deltae       .back()->GetXaxis()->SetTitle("#Delta^{}E"  );
+        h_DEmaxs1      .back()->GetXaxis()->SetTitle("E_{ratio}"   );
+      }
+    }
+    std::cout << name << " Rhad size: " << h_CutHadLeakage.size() << std::endl;
+    return;
+  }
+
+  std::vector<std::string> variables;
+  std::vector<TH1F*> h_CutHadLeakage;
+  std::vector<TH1F*> h_Reta37       ;
+  std::vector<TH1F*> h_Rphi33       ;
+  std::vector<TH1F*> h_weta2        ;
+  std::vector<TH1F*> h_fracm        ;
+  std::vector<TH1F*> h_wtot         ;
+  std::vector<TH1F*> h_w1           ;
+  std::vector<TH1F*> h_deltae       ;
+  std::vector<TH1F*> h_DEmaxs1      ;
+
+  int net;
+  int neta;
+
+};
 
 struct photonID
 {
@@ -40,7 +103,8 @@ struct photonID
   void Set_DEmaxs1      (Double_t* c){for (int i=0; i < net*neta; i++) DEmaxs1[i]       = c[i]; }
 };
 
-void EvaluatePhotonID_InclusivePhoton(TTree* tree, photonID* iddef,bool doConv, TH2* denominator, TH2* numerator){
+void EvaluatePhotonID_InclusivePhoton(TTree* tree, photonID* iddef,bool doConv, TH2* denominator, TH2* numerator,photonVariables* hists = NULL){
+
   float y_pt, y_eta_cl_s2,y_Reta,y_Rphi,y_weta2,y_fracs1,y_weta1,y_f1,y_wtots1,y_Rhad,y_Rhad1;
   float y_Eratio,y_e277,y_deltae;
   int y_convType;
@@ -118,11 +182,24 @@ void EvaluatePhotonID_InclusivePhoton(TTree* tree, photonID* iddef,bool doConv, 
     
     double weight = isRz ? mc_weight_pu*mc_weight_gen : mcTotWeightNoPU_PIDuse;
 
-    denominator->Fill(etval,etaval,weight);
-
-    bool passNum = true;
     double the_rhad = y_Rhad1;
     if ( 0.8 < fabs(y_eta_cl_s2) && fabs(y_eta_cl_s2) < 1.37 ) the_rhad = y_Rhad;
+
+    denominator->Fill(etval,etaval,weight);
+
+    if (hists) {
+      hists->h_CutHadLeakage[cutbin]->Fill(the_rhad,weight);
+      hists->h_Reta37       [cutbin]->Fill(y_Reta  ,weight);
+      hists->h_Rphi33       [cutbin]->Fill(y_Rphi  ,weight);
+      hists->h_weta2        [cutbin]->Fill(y_weta2 ,weight);
+      hists->h_fracm        [cutbin]->Fill(y_fracs1,weight);
+      hists->h_wtot         [cutbin]->Fill(y_wtots1,weight);
+      hists->h_w1           [cutbin]->Fill(y_weta1 ,weight);
+      hists->h_deltae       [cutbin]->Fill(y_deltae,weight);
+      hists->h_DEmaxs1      [cutbin]->Fill(y_Eratio,weight);
+    }
+
+    bool passNum = true;
     passNum = passNum && the_rhad < iddef->CutHadLeakage[cutbin];
     passNum = passNum && y_Reta   > iddef->Reta37[cutbin];
     passNum = passNum && y_Rphi   > iddef->Rphi33[cutbin];
