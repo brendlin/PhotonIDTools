@@ -72,9 +72,13 @@ def main(options,args) :
         variables_sp = ROOT.photonVariables('SinglePhoton_%s'%(status),numerator_sp.GetNbinsX(),numerator_sp.GetNbinsY(),status == 'Converted')
 
         # general setup of tight ID menu
-        n_et_tight  = 1+len(confs['tight'].GetValue('CutBinEnergy_photons%s'%(status),'').split(';'))
-        n_eta_tight = len(confs['tight'].GetValue('CutBinEta_photons%s'%(status),'').split(';'))
+        etbins_tight  = idhelpers.GetCutValuesFromConf(confs['tight'],'CutBinEnergy',status)
+        etabins_tight =  idhelpers.GetCutValuesFromConf(confs['tight'],'CutBinEta',status)
+        n_et_tight  = 1 + len(etbins_tight) # see note above
+        n_eta_tight = len(etabins_tight)
         tight_id = ROOT.photonID(n_et_tight,n_eta_tight)
+        tight_id.Set_EtaBinThresholds(array('d',etabins_tight))
+        tight_id.Set_EtBinThresholds(array('d',etbins_tight))
 
         for var in list(variables_rz.variables) :
             cut_values = idhelpers.GetCutValuesFromConf(confs['tight'],var,status)

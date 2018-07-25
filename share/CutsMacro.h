@@ -1,6 +1,9 @@
 #include <vector>
 #include "TString.h"
 
+//
+// This struct is designed to save histograms for each variable, in each bin of et and eta.
+//
 struct photonVariables
 {
   photonVariables(const char* name,int n_et,int n_eta,bool isConv) {
@@ -43,7 +46,6 @@ struct photonVariables
         h_DEmaxs1      .back()->GetXaxis()->SetTitle("E_{ratio}"   );
       }
     }
-    std::cout << name << " Rhad size: " << h_CutHadLeakage.size() << std::endl;
     return;
   }
 
@@ -63,6 +65,10 @@ struct photonVariables
 
 };
 
+
+//
+// This struct is designed to save all of the relevant cuts / info needed to evaluate a menu.
+//
 struct photonID
 {
   photonID(int n_et,int n_eta) {
@@ -77,6 +83,9 @@ struct photonID
     w1            = new Double_t[net*neta];
     deltae        = new Double_t[net*neta];
     DEmaxs1       = new Double_t[net*neta];
+    isolation     = "";
+    EtaBinThresholds       = new Double_t[neta];
+    EtBinThresholds        = new Double_t[net-1];
   }
 
   Double_t* CutHadLeakage;
@@ -88,6 +97,11 @@ struct photonID
   Double_t* w1;
   Double_t* deltae;
   Double_t* DEmaxs1;
+
+  Double_t* EtaBinThresholds;
+  Double_t* EtBinThresholds;
+
+  std::string isolation;
 
   int net;
   int neta;
@@ -101,6 +115,11 @@ struct photonID
   void Set_w1           (Double_t* c){for (int i=0; i < net*neta; i++) w1[i]            = c[i]; }
   void Set_deltae       (Double_t* c){for (int i=0; i < net*neta; i++) deltae[i]        = c[i]; }
   void Set_DEmaxs1      (Double_t* c){for (int i=0; i < net*neta; i++) DEmaxs1[i]       = c[i]; }
+
+  // No lower bin edge (0); Yes upper bin edge (2.47)
+  void Set_EtaBinThresholds(Double_t* c){for (int i=0; i < neta; i++) EtaBinThresholds[i] = c[i]; }
+  // No lower bin edge (0); No upper bin edge (inf).
+  void Set_EtBinThresholds (Double_t* c){for (int i=0; i < net-1 ; i++) EtBinThresholds [i] = c[i]; }
 };
 
 void EvaluatePhotonID_InclusivePhoton(TTree* tree, photonID* iddef,bool doConv, TH2* denominator, TH2* numerator,photonVariables* hists = NULL){
@@ -147,30 +166,48 @@ void EvaluatePhotonID_InclusivePhoton(TTree* tree, photonID* iddef,bool doConv, 
 
     float the_pt = isRz ? y_pt/1000. : y_pt;
     
-    int etbin,etabin;
-    double etval,etaval;
+    // Binning for the cuts
+    int etbin_cuts = 0; // start by assuming 0th bin
+    int etabin_cuts = 0; // start by assuming 0th bin
+    for (int et=0; et < iddef->net-1; et++) {
+      if (the_pt < 0.001 * iddef->EtBinThresholds[et]) break;
+      etbin_cuts = et+1;
+    }
+    if (fabs(y_eta_cl_s2) > iddef->EtaBinThresholds[iddef->neta-1] ) continue;
+    for (int eta=0; eta < iddef->neta-1; eta++) {
+      if (fabs(y_eta_cl_s2) < iddef->EtaBinThresholds[eta]) break;
+      etabin_cuts = eta+1;
+    }
+
+    int cutbin_cuts = etbin_cuts*(iddef->neta) + etabin_cuts;
+
+    // Binning for the histograms
+    int etbin_hist = 9999;
+    int etabin_hist = 9999;
+    double etval_hist = -9999999;
+    double etaval_hist = -9999999;
     if (the_pt < xaxis->GetBinLowEdge(1)) continue;
     if (the_pt > xaxis->GetBinLowEdge(denominator->GetNbinsX()+1)) continue;
-    
+
     for (int x=1;x<denominator->GetNbinsX()+1;x++) {
-      if (xaxis->GetBinLowEdge(x) < the_pt && the_pt < xaxis->GetBinLowEdge(x+1))
+      if (xaxis->GetBinLowEdge(x) <= the_pt && the_pt < xaxis->GetBinLowEdge(x+1))
       {
-        etbin = x-1; // start at 0
-        etval = xaxis->GetBinLowEdge(x);
+        etbin_hist = x-1; // start at 0
+        etval_hist = xaxis->GetBinLowEdge(x);
         continue;
       }
     }
 
     for (int y=1;y<denominator->GetNbinsY()+1;y++) {
-      if (yaxis->GetBinLowEdge(y) < fabs(y_eta_cl_s2) && fabs(y_eta_cl_s2) < yaxis->GetBinLowEdge(y+1))
+      if (yaxis->GetBinLowEdge(y) <= fabs(y_eta_cl_s2) && fabs(y_eta_cl_s2) < yaxis->GetBinLowEdge(y+1))
       {
-        etabin = y-1; // start at 0
-        etaval = yaxis->GetBinLowEdge(y);
+        etabin_hist = y-1; // start at 0
+        etaval_hist = yaxis->GetBinLowEdge(y);
         continue;
       }
     }
 
-    int cutbin = etbin*(iddef->neta) + etabin;
+    int cutbin_hist = etbin_hist*(denominator->GetNbinsY()) + etabin_hist;
 
     // Phase space: converted or unconverted:
     if (doConv == (y_convType == 0)) continue;
@@ -185,34 +222,34 @@ void EvaluatePhotonID_InclusivePhoton(TTree* tree, photonID* iddef,bool doConv, 
     double the_rhad = y_Rhad1;
     if ( 0.8 < fabs(y_eta_cl_s2) && fabs(y_eta_cl_s2) < 1.37 ) the_rhad = y_Rhad;
 
-    denominator->Fill(etval,etaval,weight);
+    denominator->Fill(etval_hist,etaval_hist,weight);
 
     if (hists) {
-      hists->h_CutHadLeakage[cutbin]->Fill(the_rhad,weight);
-      hists->h_Reta37       [cutbin]->Fill(y_Reta  ,weight);
-      hists->h_Rphi33       [cutbin]->Fill(y_Rphi  ,weight);
-      hists->h_weta2        [cutbin]->Fill(y_weta2 ,weight);
-      hists->h_fracm        [cutbin]->Fill(y_fracs1,weight);
-      hists->h_wtot         [cutbin]->Fill(y_wtots1,weight);
-      hists->h_w1           [cutbin]->Fill(y_weta1 ,weight);
-      hists->h_deltae       [cutbin]->Fill(y_deltae,weight);
-      hists->h_DEmaxs1      [cutbin]->Fill(y_Eratio,weight);
+      hists->h_CutHadLeakage[cutbin_hist]->Fill(the_rhad,weight);
+      hists->h_Reta37       [cutbin_hist]->Fill(y_Reta  ,weight);
+      hists->h_Rphi33       [cutbin_hist]->Fill(y_Rphi  ,weight);
+      hists->h_weta2        [cutbin_hist]->Fill(y_weta2 ,weight);
+      hists->h_fracm        [cutbin_hist]->Fill(y_fracs1,weight);
+      hists->h_wtot         [cutbin_hist]->Fill(y_wtots1,weight);
+      hists->h_w1           [cutbin_hist]->Fill(y_weta1 ,weight);
+      hists->h_deltae       [cutbin_hist]->Fill(y_deltae,weight);
+      hists->h_DEmaxs1      [cutbin_hist]->Fill(y_Eratio,weight);
     }
 
     bool passNum = true;
-    passNum = passNum && the_rhad < iddef->CutHadLeakage[cutbin];
-    passNum = passNum && y_Reta   > iddef->Reta37[cutbin];
-    passNum = passNum && y_Rphi   > iddef->Rphi33[cutbin];
-    passNum = passNum && y_weta2  < iddef->weta2[cutbin];
-    passNum = passNum && y_fracs1 < iddef->fracm[cutbin];
-    passNum = passNum && y_wtots1 < iddef->wtot[cutbin];
-    passNum = passNum && y_weta1  < iddef->w1[cutbin];
-    passNum = passNum && y_deltae < iddef->deltae[cutbin];
-    passNum = passNum && y_Eratio > iddef->DEmaxs1[cutbin];
+    passNum = passNum && the_rhad < iddef->CutHadLeakage[cutbin_cuts];
+    passNum = passNum && y_Reta   > iddef->Reta37[cutbin_cuts];
+    passNum = passNum && y_Rphi   > iddef->Rphi33[cutbin_cuts];
+    passNum = passNum && y_weta2  < iddef->weta2[cutbin_cuts];
+    passNum = passNum && y_fracs1 < iddef->fracm[cutbin_cuts];
+    passNum = passNum && y_wtots1 < iddef->wtot[cutbin_cuts];
+    passNum = passNum && y_weta1  < iddef->w1[cutbin_cuts];
+    passNum = passNum && y_deltae < iddef->deltae[cutbin_cuts];
+    passNum = passNum && y_Eratio > iddef->DEmaxs1[cutbin_cuts];
     if (!passNum) continue;
 
     // Fill numerator histogram
-    numerator->Fill(etval,etaval,weight);
+    numerator->Fill(etval_hist,etaval_hist,weight);
     
   } // End loop over entries
   
