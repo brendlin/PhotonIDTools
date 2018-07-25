@@ -84,8 +84,12 @@ def main(options,args) :
             values_not_checked['looser' ].pop(values_not_checked['looser' ].index(i))
             continue
 
-        l_offline = list(float(a) for a in offline.split(';'))
-        l_online  = list(float(a) for a in online .split(';'))
+        # Get rid of comments wrapped with # on either side
+        tmp_offline = ''.join(list(a if not i%2 else '' for i,a in enumerate(offline.split('#'))))
+        tmp_online  = ''.join(list(a if not i%2 else '' for i,a in enumerate(online .split('#'))))
+
+        l_offline = list(float(a) for a in tmp_offline.split(';'))
+        l_online  = list(float(a) for a in tmp_online .split(';'))
 
         if offline == online :
             values_not_checked['tighter'].pop(values_not_checked['tighter'].index(i))
@@ -132,8 +136,16 @@ def main(options,args) :
             values_not_checked['tighter'].pop(values_not_checked['tighter'].index(i))            
             continue
 
-        l_offline = list(float(a) for a in offline.split(';'))
-        l_online  = list(float(a) for a in online .split(';'))
+        # Get rid of comments wrapped with # on either side
+        tmp_offline = ''.join(list(a if not i%2 else '' for i,a in enumerate(offline.split('#'))))
+        tmp_online  = ''.join(list(a if not i%2 else '' for i,a in enumerate(online .split('#'))))
+
+        l_offline = list(float(a) for a in tmp_offline.split(';'))
+        l_online  = list(float(a) for a in tmp_online .split(';'))
+
+        # If online one is unbinned in pt, this will make one copy of the eta cuts per et bin:
+        if len(l_offline) != len(l_online) and not len(l_offline)%len(l_online) :
+           l_online = l_online * (len(l_offline)/len(l_online))
 
         if len(l_offline) != len(l_online) :
             print 'ERROR: One conf has the wrong length!\n',i,'Offline:',l_offline,'\n',i,'Online :',l_online
@@ -147,9 +159,25 @@ def main(options,args) :
             if (not smaller_is_tighter[cut_shortname]) and l_offline[j] < l_online[j] :
                 bad_indices.append(j)
 
+        # Make the strings of cuts
         str_offline = ', '.join((color.BOLD + ('%.6f'%(a)).rstrip('0').rjust(9) + color.END if (i in bad_indices) else ('%.6f'%(a)).rstrip('0').rjust(9) ) for i,a in enumerate(l_offline))
         str_online  = ', '.join((color.BOLD + ('%.6f'%(a)).rstrip('0').rjust(9) + color.END if (i in bad_indices) else ('%.6f'%(a)).rstrip('0').rjust(9) ) for i,a in enumerate(l_online ))
-        
+
+        # Add return carriages
+        neta_bins = len(confs['tighter'].GetValue('CutBinEta_photons%s'%('Converted'),'').split(';'))
+
+        def AddReturnCarriages(tmp) :
+            tmp2 = '\n'
+            for ii in range(100) :
+               tmp2 += ', '.join(tmp.split(', ')[0:neta_bins]) + '\n'
+               tmp   = ', '.join(tmp.split(', ')[neta_bins:])
+               if not tmp :
+                  break
+            return tmp2
+
+        str_offline = AddReturnCarriages(str_offline)
+        str_online = AddReturnCarriages(str_online)
+
         str_larger_smaller = 'larger' if smaller_is_tighter[cut_shortname] else 'smaller'
         str_i = i.ljust(34)
 
