@@ -56,38 +56,28 @@ def main(options,args) :
 
     files_rz,trees_rz,keys_rz = anaplot.GetTreesFromFiles(options.radzsignal,treename=options.radztreename)
     files_sp,trees_sp,keys_sp = anaplot.GetTreesFromFiles(options.singlephotonsignal,treename=options.singlephotontreename)
+    files_jf,trees_jf,keys_jf = anaplot.GetTreesFromFiles(options.jetfilteredbackground,treename=options.singlephotontreename)
 
     for status in ['Converted','NonConverted'] :
 
-        # Assume for now that Strips and non-strips binning is the same
-        eta_bins = confs['tight'].GetValue('CutBinEta_photons%s'%(status),'').split(';')
-        eta_bins = list(float(a.rstrip().lstrip()) for a in eta_bins)
-        eta_bins = [0] + eta_bins[:-1]
+        # Eta bins for Plots!
+        eta_bins = [0,0.6,0.8,1.15,1.37,1.52,1.81,2.01,2.37]
         print eta_bins
 
         # Assume for now that Strips and non-strips binning is the same
-        et_bins = confs['tight'].GetValue('CutBinEnergy_photons%s'%(status),'').split(';')
-        if ''.join(et_bins) :
-            et_bins = list(float(a.rstrip().lstrip()) for a in et_bins)
-            # Add first bin, 10 GeV
-            et_bins = [10000] + et_bins
-            # Remove all bins above 100 GeV
-            for et in range(len(et_bins)-1,-1,-1) :
-                if et_bins[et] > 100000.1 :
-                    et_bins.pop(et)
-            # Add 100 GeV bin threshold
-            if int(et_bins[-1]) != 100000 :
-                et_bins = et_bins + [100000]
-        else :
-            et_bins = [10000,15000,20000,25000,30000,35000,40000,45000,50000,60000,80000,100000]
+        et_bins = [10000,15000,20000,25000,30000,35000,40000,45000,50000,60000,80000,100000]
         print et_bins
 
         args = len(et_bins)-1,array('d',list(a/1000. for a in et_bins)),len(eta_bins)-1,array('d',eta_bins)
+
         numerator_rz = ROOT.TH2F('numerator_%s_%s'%(status,'radz'),'Z#rightarrow^{}ll#gamma MC (fudged)',*args)
         denominator_rz = ROOT.TH2F('denominator_%s_%s'%(status,'radz'),'Z#rightarrow^{}ll#gamma MC (fudged)',*args)
 
         numerator_sp = ROOT.TH2F('numerator_%s_%s'%(status,'incl'),'Inclusive #gamma MC (fudged)',*args)
         denominator_sp = ROOT.TH2F('denominator_%s_%s'%(status,'incl'),'Inclusive #gamma MC (fudged)',*args)
+
+        numerator_jf = ROOT.TH2F('numerator_%s_%s'%(status,'jf'),'Filtered jet MC (fudged)',*args)
+        denominator_jf = ROOT.TH2F('denominator_%s_%s'%(status,'jf'),'Filtered jet MC (fudged)',*args)
 
         # Test code - for fixing up the plot cosmetics:
         if options.cosmetics :
@@ -123,11 +113,14 @@ def main(options,args) :
         # Et: nbins = nthresholds + 1 (0 and inf are implied as thresholds)
         etbins_tight  = idhelpers.GetCutValuesFromConf(confs['tight'],'CutBinEnergy',status)
         etabins_tight =  idhelpers.GetCutValuesFromConf(confs['tight'],'CutBinEta',status)
+        if etbins_tight == None :
+            etbins_tight = []
         n_et_tight  = 1 + len(etbins_tight) # see note above
         n_eta_tight = len(etabins_tight)
         tight_id = ROOT.photonID(n_et_tight,n_eta_tight)
         tight_id.Set_EtaBinThresholds(array('d',etabins_tight))
-        tight_id.Set_EtBinThresholds(array('d',etbins_tight))
+        if etbins_tight :
+            tight_id.Set_EtBinThresholds(array('d',etbins_tight))
 
         for var in variables.keys() :
             cut_values = idhelpers.GetCutValuesFromConf(confs['tight'],var,status)
@@ -157,6 +150,10 @@ def main(options,args) :
         numerator_sp.Divide(numerator_sp,denominator_sp,1,1,'B')
         #numerator_rz.Draw('colz')
 
+
+        ##
+        ## "Compressed" plots (lots of plots on the same canvas)
+        ##
         can = ROOT.TCanvas('can_pt_%s'%(status),'blah',600,900);
         pads = []
         hists_rz = []
@@ -245,6 +242,8 @@ def main(options,args) :
             os.makedirs('%s'%(options.outdir))
         can.Print('%s/Efficiency_VersusPt_%s.pdf'%(options.outdir,status))
 
+    ## End compressed plots
+
     return
     
 #-----------------------------------------------
@@ -260,6 +259,8 @@ if __name__ == '__main__':
 
     p.add_option('--singlephotonsignal'  ,type = 'string', default = '', dest = 'singlephotonsignal' ,help = 'Single photon Signal file' )
     p.add_option('--singlephotontreename',type = 'string', default = 'SinglePhoton', dest = 'singlephotontreename' ,help = 'Single photon treename' )
+
+    p.add_option('--jetfilteredbackground',type = 'string', default = '', dest = 'jetfilteredbackground' ,help = 'Jet-filtered background file' )
 
     p.add_option('--outdir',type='string',default='.',dest='outdir',help='output directory')
 

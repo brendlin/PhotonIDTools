@@ -45,20 +45,11 @@ def main(options,args) :
         files_sp,trees_sp,keys_sp = anaplot.GetTreesFromFiles(options.singlephotonsignal,treename=options.singlephotontreename)
 
         # Assume for now that Strips and non-strips binning is the same
-        eta_bins = confs['tight'].GetValue('CutBinEta_photons%s'%(status),'').split(';')
-        eta_bins = list(float(a.rstrip().lstrip()) for a in eta_bins)
-        eta_bins = [0] + eta_bins
+        eta_bins = [0,0.6,0.8,1.15,1.37,1.52,1.81,2.01,2.37,2.47]
         print eta_bins
 
         # Assume for now that Strips and non-strips binning is the same
-        et_bins = confs['tight'].GetValue('CutBinEnergy_photons%s'%(status),'').split(';')
-        et_bins = list(float(a.rstrip().lstrip()) for a in et_bins)
-        et_bins = [10000] + et_bins
-        tmp = []
-        for i in et_bins :
-            if i < 100000.1 :
-                tmp.append(i)
-        et_bins = tmp
+        et_bins = [10000,15000,20000,25000,30000,35000,40000,45000,50000,60000,80000,100000]
         print et_bins
 
         args = len(et_bins)-1,array('d',list(a/1000. for a in et_bins)),len(eta_bins)-1,array('d',eta_bins)
@@ -178,7 +169,20 @@ def main(options,args) :
 
                     # Get the cut values
                     for id in ['tight','loose','menu3','menu4'] :
-                        cut_value = idhelpers.GetCutValueFromConf(confs[id],var,status,et,eta)
+
+                        # Get the right cut threshold
+                        # Note that the thresholds must match between the plotting and the cut menu!
+                        et_cutvalues = et
+                        etbins_tight = idhelpers.GetCutValuesFromConf(confs[id],'CutBinEnergy',status)
+
+                        if etbins_tight :
+                            etbins_tight  = [0] + list(int(a) for a in etbins_tight)
+                            if et_bins[et] > etbins_tight[-1] :
+                                et_cutvalues = len(etbins_tight)-1
+                            else :
+                                et_cutvalues = etbins_tight.index(int(et_bins[et]))
+
+                        cut_value = idhelpers.GetCutValueFromConf(confs[id],var,status,et_cutvalues,eta)
                         if cut_value == None :
                             continue
                         cuts_graphs[id].SetPoint(et*2  ,cut_value,et  )
