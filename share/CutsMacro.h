@@ -186,8 +186,8 @@ void EvaluatePhotonID_InclusivePhoton(TTree* tree, photonID* iddef,bool doConv, 
     int etabin_hist = 9999;
     double etval_hist = -9999999;
     double etaval_hist = -9999999;
-    if (the_pt < xaxis->GetBinLowEdge(1)) continue;
-    if (the_pt > xaxis->GetBinLowEdge(denominator->GetNbinsX()+1)) continue;
+    if (the_pt <  xaxis->GetBinLowEdge(1)) continue;
+    if (the_pt >= xaxis->GetBinLowEdge(denominator->GetNbinsX()+1)) continue;
 
     for (int x=1;x<denominator->GetNbinsX()+1;x++) {
       if (xaxis->GetBinLowEdge(x) <= the_pt && the_pt < xaxis->GetBinLowEdge(x+1))
