@@ -54,9 +54,31 @@ def main(options,args) :
         print 'Using %s for %s'%(getattr(options,confstr),confstr)
         confs[confstr] = ROOT.TEnv(getattr(options,confstr))
 
-    files_rz,trees_rz,keys_rz = anaplot.GetTreesFromFiles(options.radzsignal,treename=options.radztreename)
-    files_sp,trees_sp,keys_sp = anaplot.GetTreesFromFiles(options.singlephotonsignal,treename=options.singlephotontreename)
-    files_jf,trees_jf,keys_jf = anaplot.GetTreesFromFiles(options.jetfilteredbackground,treename=options.singlephotontreename)
+    samples = []
+    colors = dict()
+    trees = dict()
+    titles = dict()
+
+    if options.radzsignal :
+        samples.append('radz')
+        files_rz,trees_rz,keys_rz = anaplot.GetTreesFromFiles(options.radzsignal,treename=options.radztreename)
+        trees['radz'] = trees_rz[keys_rz[0]] # yeah sorry about this syntax.
+        colors['radz'] = ROOT.kBlack
+        titles['radz'] = 'Z#rightarrow^{}ll#gamma MC (fudged)'
+
+    if options.singlephotonsignal :
+        samples.append('incl')
+        files_sp,trees_sp,keys_sp = anaplot.GetTreesFromFiles(options.singlephotonsignal,treename=options.singlephotontreename)
+        trees['incl'] = trees_sp[keys_sp[0]]
+        colors['incl'] = ROOT.kRed+1
+        titles['incl'] = 'Inclusive #gamma MC (fudged)'
+
+    if options.jetfilteredbackground :
+        samples.append('jf')
+        files_jf,trees_jf,keys_jf = anaplot.GetTreesFromFiles(options.jetfilteredbackground,treename=options.singlephotontreename)
+        trees['jf'] = trees_jf[keys_jf[0]]
+        colors['jf'] = ROOT.kAzure-2
+        titles['jf'] = 'Filtered jet MC (fudged)'
 
     for status in ['Converted','NonConverted'] :
 
@@ -70,14 +92,12 @@ def main(options,args) :
 
         args = len(et_bins)-1,array('d',list(a/1000. for a in et_bins)),len(eta_bins)-1,array('d',eta_bins)
 
-        numerator_rz = ROOT.TH2F('numerator_%s_%s'%(status,'radz'),'Z#rightarrow^{}ll#gamma MC (fudged)',*args)
-        denominator_rz = ROOT.TH2F('denominator_%s_%s'%(status,'radz'),'Z#rightarrow^{}ll#gamma MC (fudged)',*args)
+        numerators = dict()
+        denominators = dict()
 
-        numerator_sp = ROOT.TH2F('numerator_%s_%s'%(status,'incl'),'Inclusive #gamma MC (fudged)',*args)
-        denominator_sp = ROOT.TH2F('denominator_%s_%s'%(status,'incl'),'Inclusive #gamma MC (fudged)',*args)
-
-        numerator_jf = ROOT.TH2F('numerator_%s_%s'%(status,'jf'),'Filtered jet MC (fudged)',*args)
-        denominator_jf = ROOT.TH2F('denominator_%s_%s'%(status,'jf'),'Filtered jet MC (fudged)',*args)
+        for sample in samples :
+            numerators[sample]   = ROOT.TH2F('numerator_%s_%s'  %(status,sample),titles.get(sample),*args)
+            denominators[sample] = ROOT.TH2F('denominator_%s_%s'%(status,sample),titles.get(sample),*args)
 
         # Test code - for fixing up the plot cosmetics:
         if options.cosmetics :
@@ -88,21 +108,13 @@ def main(options,args) :
             for et in range(len(et_bins)-1) :
                 for eta in range(len(eta_bins)-1) :
 
-                    if options.radzsignal :
+                    for sample in samples :
                         passing = rand.Poisson(1000)
                         failing = rand.Poisson(100)
-                        denominator_rz.SetBinContent(et+1,eta+1,passing+failing)
-                        denominator_rz.SetBinError  (et+1,eta+1,0.01)
-                        numerator_rz.SetBinContent  (et+1,eta+1,passing)
-                        numerator_rz.SetBinError    (et+1,eta+1,0.01)
-
-                    if options.singlephotonsignal :
-                        passing = rand.Poisson(1000)
-                        failing = rand.Poisson(100)
-                        denominator_sp.SetBinContent(et+1,eta+1,passing+failing)
-                        denominator_sp.SetBinError  (et+1,eta+1,0.01)
-                        numerator_sp.SetBinContent  (et+1,eta+1,passing)
-                        numerator_sp.SetBinError    (et+1,eta+1,0.01)
+                        denominators[sample].SetBinContent(et+1,eta+1,passing+failing)
+                        denominators[sample].SetBinError  (et+1,eta+1,0.01)
+                        numerators[sample].SetBinContent  (et+1,eta+1,passing)
+                        numerators[sample].SetBinError    (et+1,eta+1,0.01)
 
             ## End eta block
         ## End Et block
@@ -113,8 +125,6 @@ def main(options,args) :
         # Et: nbins = nthresholds + 1 (0 and inf are implied as thresholds)
         etbins_tight  = idhelpers.GetCutValuesFromConf(confs['tight'],'CutBinEnergy',status)
         etabins_tight =  idhelpers.GetCutValuesFromConf(confs['tight'],'CutBinEta',status)
-        if etbins_tight == None :
-            etbins_tight = []
         n_et_tight  = 1 + len(etbins_tight) # see note above
         n_eta_tight = len(etabins_tight)
         tight_id = ROOT.photonID(n_et_tight,n_eta_tight)
@@ -124,40 +134,31 @@ def main(options,args) :
 
         for var in variables.keys() :
             cut_values = idhelpers.GetCutValuesFromConf(confs['tight'],var,status)
+            if not cut_values :
+                continue
             cut_values = array('d',cut_values)
             getattr(tight_id,'Set_%s'%(var))(cut_values)
 
         # New Radiative-Z efficiency method:
-        if options.radzsignal :
-            print 'Evaluating Radiative-Z signal ID...'
-            ROOT.EvaluatePhotonID_InclusivePhoton(trees_rz[keys_rz[0]],
+        for sample in samples :
+            print 'Evaluating %s signal ID...'%(sample)
+            ROOT.EvaluatePhotonID_InclusivePhoton(trees[sample],
                                                   tight_id,
                                                   status == 'Converted',
-                                                  denominator_rz,
-                                                  numerator_rz)
+                                                  denominators[sample],
+                                                  numerators[sample])
 
-        # New Single Photon efficiency method:
-        if options.singlephotonsignal :
-            print 'Evaluating Single-photon signal ID...'
-            ROOT.EvaluatePhotonID_InclusivePhoton(trees_sp[keys_sp[0]],
-                                                  tight_id,
-                                                  status == 'Converted',
-                                                  denominator_sp,
-                                                  numerator_sp)
-
-        can2d = ROOT.TCanvas('can2d_%s'%(status),'blah',600,500);
-        numerator_rz.Divide(numerator_rz,denominator_rz,1,1,'B')
-        numerator_sp.Divide(numerator_sp,denominator_sp,1,1,'B')
-        #numerator_rz.Draw('colz')
-
+            # Divide (using Binomial errors)
+            numerators[sample].Divide(numerators[sample],denominators[sample],1,1,'B')
 
         ##
         ## "Compressed" plots (lots of plots on the same canvas)
         ##
         can = ROOT.TCanvas('can_pt_%s'%(status),'blah',600,900);
         pads = []
-        hists_rz = []
-        hists_sp = []
+        hists_ptplot = dict()
+        for sample in samples :
+            hists_ptplot[sample] = []
 
         bm = 0.08 # bottom margin
         padheight = (1-bm-0.04)/float(len(eta_bins)-2)
@@ -168,22 +169,13 @@ def main(options,args) :
 
             current_hists = []
 
-            # Radiative-Z: Project onto x-axis (Et)
-            if options.radzsignal :
-                name = numerator_rz.GetName()+'_eta%d'%(eta+1)
-                numerator_rz.ProjectionX(name,eta+1,eta+1)
-                hists_rz.append(ROOT.gDirectory.Get(name))
-                current_hists.append(hists_rz[-1])
-
-            # Single-photon: Project onto x-axis (Et)
-            if options.singlephotonsignal :
-                name = numerator_sp.GetName()+'_eta%d'%(eta+1)
-                numerator_sp.ProjectionX(name,eta+1,eta+1)
-                hists_sp.append(ROOT.gDirectory.Get(name))
-                hists_sp[-1].SetMarkerColor(ROOT.kRed+1)
-                hists_sp[-1].SetLineColor(ROOT.kRed+1)
-                current_hists.append(hists_sp[-1])
-
+            for sample in samples :
+                name = numerators[sample].GetName()+'_eta%d'%(eta+1)
+                numerators[sample].ProjectionX(name,eta+1,eta+1)
+                hists_ptplot[sample].append(ROOT.gDirectory.Get(name))
+                hists_ptplot[sample][-1].SetMarkerColor(colors[sample])
+                hists_ptplot[sample][-1].SetLineColor(colors[sample])
+                current_hists.append(hists_ptplot[sample][-1])
 
             drawopt = 'pE'
             if eta1 > 0 :

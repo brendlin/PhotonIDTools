@@ -86,6 +86,17 @@ struct photonID
     isolation     = "";
     EtaBinThresholds       = new Double_t[neta];
     EtBinThresholds        = new Double_t[net-1];
+
+    do_CutHadLeakage = false;
+    do_Reta37        = false;
+    do_Rphi33        = false;
+    do_weta2         = false;
+    do_fracm         = false;
+    do_wtot          = false;
+    do_w1            = false;
+    do_deltae        = false;
+    do_DEmaxs1       = false;
+
   }
 
   Double_t* CutHadLeakage;
@@ -106,15 +117,25 @@ struct photonID
   int net;
   int neta;
 
-  void Set_CutHadLeakage(Double_t* c){for (int i=0; i < net*neta; i++) CutHadLeakage[i] = c[i]; }
-  void Set_Reta37       (Double_t* c){for (int i=0; i < net*neta; i++) Reta37[i]        = c[i]; }
-  void Set_Rphi33       (Double_t* c){for (int i=0; i < net*neta; i++) Rphi33[i]        = c[i]; }
-  void Set_weta2        (Double_t* c){for (int i=0; i < net*neta; i++) weta2[i]         = c[i]; }
-  void Set_fracm        (Double_t* c){for (int i=0; i < net*neta; i++) fracm[i]         = c[i]; }
-  void Set_wtot         (Double_t* c){for (int i=0; i < net*neta; i++) wtot[i]          = c[i]; }
-  void Set_w1           (Double_t* c){for (int i=0; i < net*neta; i++) w1[i]            = c[i]; }
-  void Set_deltae       (Double_t* c){for (int i=0; i < net*neta; i++) deltae[i]        = c[i]; }
-  void Set_DEmaxs1      (Double_t* c){for (int i=0; i < net*neta; i++) DEmaxs1[i]       = c[i]; }
+  bool do_CutHadLeakage;
+  bool do_Reta37       ;
+  bool do_Rphi33       ;
+  bool do_weta2        ;
+  bool do_fracm        ;
+  bool do_wtot         ;
+  bool do_w1           ;
+  bool do_deltae       ;
+  bool do_DEmaxs1      ;
+
+  void Set_CutHadLeakage(Double_t* c){ do_CutHadLeakage = true; for (int i=0; i < net*neta; i++) CutHadLeakage[i] = c[i]; }
+  void Set_Reta37       (Double_t* c){ do_Reta37        = true; for (int i=0; i < net*neta; i++) Reta37[i]        = c[i]; }
+  void Set_Rphi33       (Double_t* c){ do_Rphi33        = true; for (int i=0; i < net*neta; i++) Rphi33[i]        = c[i]; }
+  void Set_weta2        (Double_t* c){ do_weta2         = true; for (int i=0; i < net*neta; i++) weta2[i]         = c[i]; }
+  void Set_fracm        (Double_t* c){ do_fracm         = true; for (int i=0; i < net*neta; i++) fracm[i]         = c[i]; }
+  void Set_wtot         (Double_t* c){ do_wtot          = true; for (int i=0; i < net*neta; i++) wtot[i]          = c[i]; }
+  void Set_w1           (Double_t* c){ do_w1            = true; for (int i=0; i < net*neta; i++) w1[i]            = c[i]; }
+  void Set_deltae       (Double_t* c){ do_deltae        = true; for (int i=0; i < net*neta; i++) deltae[i]        = c[i]; }
+  void Set_DEmaxs1      (Double_t* c){ do_DEmaxs1       = true; for (int i=0; i < net*neta; i++) DEmaxs1[i]       = c[i]; }
 
   // No lower bin edge (0); Yes upper bin edge (2.47)
   void Set_EtaBinThresholds(Double_t* c){for (int i=0; i < neta; i++) EtaBinThresholds[i] = c[i]; }
@@ -237,15 +258,15 @@ void EvaluatePhotonID_InclusivePhoton(TTree* tree, photonID* iddef,bool doConv, 
     }
 
     bool passNum = true;
-    passNum = passNum && the_rhad < iddef->CutHadLeakage[cutbin_cuts];
-    passNum = passNum && y_Reta   > iddef->Reta37[cutbin_cuts];
-    passNum = passNum && y_Rphi   > iddef->Rphi33[cutbin_cuts];
-    passNum = passNum && y_weta2  < iddef->weta2[cutbin_cuts];
-    passNum = passNum && y_fracs1 < iddef->fracm[cutbin_cuts];
-    passNum = passNum && y_wtots1 < iddef->wtot[cutbin_cuts];
-    passNum = passNum && y_weta1  < iddef->w1[cutbin_cuts];
-    passNum = passNum && y_deltae < iddef->deltae[cutbin_cuts];
-    passNum = passNum && y_Eratio > iddef->DEmaxs1[cutbin_cuts];
+    if (iddef->do_CutHadLeakage) passNum = passNum && the_rhad < iddef->CutHadLeakage[cutbin_cuts];
+    if (iddef->do_Reta37       ) passNum = passNum && y_Reta   > iddef->Reta37[cutbin_cuts];
+    if (iddef->do_Rphi33       ) passNum = passNum && y_Rphi   > iddef->Rphi33[cutbin_cuts];
+    if (iddef->do_weta2        ) passNum = passNum && y_weta2  < iddef->weta2[cutbin_cuts];
+    if (iddef->do_fracm        ) passNum = passNum && y_fracs1 < iddef->fracm[cutbin_cuts];
+    if (iddef->do_wtot         ) passNum = passNum && y_wtots1 < iddef->wtot[cutbin_cuts];
+    if (iddef->do_w1           ) passNum = passNum && y_weta1  < iddef->w1[cutbin_cuts];
+    if (iddef->do_deltae       ) passNum = passNum && y_deltae < iddef->deltae[cutbin_cuts];
+    if (iddef->do_DEmaxs1      ) passNum = passNum && y_Eratio > iddef->DEmaxs1[cutbin_cuts];
     if (!passNum) continue;
 
     // Fill numerator histogram

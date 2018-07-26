@@ -8,7 +8,7 @@ def GetCutValuesFromConf(conf,var,status) :
     conf_item = '%s_photons%s'%(var,status)
     cut_values = conf.GetValue(conf_item,'')
     if not cut_values :
-        return None
+        return []
 
     # Get rid of comments wrapped with # on either side
     cut_values = ''.join(list(a if not i%2 else '' for i,a in enumerate(cut_values.split('#'))))
@@ -19,7 +19,7 @@ def GetCutValuesFromConf(conf,var,status) :
 
 def GetCutValueFromConf(conf,var,status,etbin,etabin) :
     cut_values = GetCutValuesFromConf(conf,var,status)
-    if cut_values == None :
+    if not cut_values :
         return None
     try :
         cut_value = cut_values[etbin*9 + etabin] # Et-dependent
