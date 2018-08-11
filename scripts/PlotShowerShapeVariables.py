@@ -79,22 +79,22 @@ def main(options,args) :
         # New Radiative-Z efficiency method:
         if options.radzsignal :
             print 'Evaluating Radiative-Z signal ID...'
-            ROOT.EvaluatePhotonID_InclusivePhoton(trees_rz[keys_rz[0]],
-                                                  tight_id,
-                                                  status == 'Converted',
-                                                  denominator_rz,
-                                                  numerator_rz,
-                                                  variables_rz)
+            ROOT.EvaluatePhotonID(trees_rz[keys_rz[0]],
+                                  tight_id,
+                                  status == 'Converted',
+                                  denominator_rz,
+                                  numerator_rz,
+                                  variables_rz)
 
         # New Single Photon efficiency method:
         if options.singlephotonsignal :
             print 'Evaluating Single-photon signal ID...'
-            ROOT.EvaluatePhotonID_InclusivePhoton(trees_sp[keys_sp[0]],
-                                                  tight_id,
-                                                  status == 'Converted',
-                                                  denominator_sp,
-                                                  numerator_sp,
-                                                  variables_sp)
+            ROOT.EvaluatePhotonID(trees_sp[keys_sp[0]],
+                                  tight_id,
+                                  status == 'Converted',
+                                  denominator_sp,
+                                  numerator_sp,
+                                  variables_sp)
 
 
         # Process the cuts and the histograms

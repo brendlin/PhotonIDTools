@@ -143,7 +143,7 @@ struct photonID
   void Set_EtBinThresholds (Double_t* c){for (int i=0; i < net-1 ; i++) EtBinThresholds [i] = c[i]; }
 };
 
-void EvaluatePhotonID_InclusivePhoton(TTree* tree, photonID* iddef,bool doConv, TH2* denominator, TH2* numerator,photonVariables* hists = NULL){
+void EvaluatePhotonID(TTree* tree, photonID* iddef,bool doConv, TH2* denominator, TH2* numerator,photonVariables* hists = NULL,bool doTruthMatchPhoton = true, bool doTruthMatchFake = false){
 
   float y_pt, y_eta_cl_s2,y_Reta,y_Rphi,y_weta2,y_fracs1,y_weta1,y_f1,y_wtots1,y_Rhad,y_Rhad1;
   float y_Eratio,y_e277,y_deltae;
@@ -235,7 +235,8 @@ void EvaluatePhotonID_InclusivePhoton(TTree* tree, photonID* iddef,bool doConv, 
 
     // Fill denominator histogram
     bool passDen = true;
-    if (!isRz) passDen = passDen && y_isTruthMatchedPhoton;
+    if (!isRz && doTruthMatchPhoton) passDen = passDen &&  y_isTruthMatchedPhoton;
+    if (!isRz && doTruthMatchFake  ) passDen = passDen && !y_isTruthMatchedPhoton;
     if (!passDen) continue;
     
     double weight = isRz ? mc_weight_pu*mc_weight_gen : mcTotWeightNoPU_PIDuse;

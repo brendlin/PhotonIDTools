@@ -49,15 +49,24 @@ def main(options,args) :
     plotfunc.SetupStyle()
     ROOT.gStyle.SetPadTickX(0)
 
+    used_confs = []
     confs = dict()
-    for confstr in ['tight'] :
+    for confstr in ['tight','loose','menu3'] :
+        if not getattr(options,confstr) :
+            continue
         print 'Using %s for %s'%(getattr(options,confstr),confstr)
+        used_confs.append(confstr)
         confs[confstr] = ROOT.TEnv(getattr(options,confstr))
 
     samples = []
     colors = dict()
+    marker_styles = dict()
     trees = dict()
     titles = dict()
+
+    colors['tight'] = ROOT.kBlack
+    colors['loose'] = ROOT.kRed+1
+    colors['menu3'] = ROOT.kAzure-2
 
     if options.radzsignal :
         samples.append('radz')
@@ -65,6 +74,7 @@ def main(options,args) :
         trees['radz'] = trees_rz[keys_rz[0]] # yeah sorry about this syntax.
         colors['radz'] = ROOT.kBlack
         titles['radz'] = 'Z#rightarrow^{}ll#gamma MC (fudged)'
+        marker_styles['radz'] = 33
 
     if options.singlephotonsignal :
         samples.append('incl')
@@ -72,6 +82,7 @@ def main(options,args) :
         trees['incl'] = trees_sp[keys_sp[0]]
         colors['incl'] = ROOT.kRed+1
         titles['incl'] = 'Inclusive #gamma MC (fudged)'
+        marker_styles['incl'] = 20
 
     if options.jetfilteredbackground :
         samples.append('jf')
@@ -79,6 +90,7 @@ def main(options,args) :
         trees['jf'] = trees_jf[keys_jf[0]]
         colors['jf'] = ROOT.kAzure-2
         titles['jf'] = 'Filtered jet MC (fudged)'
+        marker_styles['jf'] = 34
 
     for status in ['Converted','NonConverted'] :
 
@@ -95,9 +107,12 @@ def main(options,args) :
         numerators = dict()
         denominators = dict()
 
-        for sample in samples :
-            numerators[sample]   = ROOT.TH2F('numerator_%s_%s'  %(status,sample),titles.get(sample),*args)
-            denominators[sample] = ROOT.TH2F('denominator_%s_%s'%(status,sample),titles.get(sample),*args)
+        for conf in used_confs :
+            numerators[conf] = dict()
+            denominators[conf] = dict()
+            for sample in samples :
+                numerators[conf][sample]   = ROOT.TH2F('numerator_%s_%s_%s'  %(status,sample,conf),titles.get(sample),*args)
+                denominators[conf][sample] = ROOT.TH2F('denominator_%s_%s_%s'%(status,sample,conf),titles.get(sample),*args)
 
         # Test code - for fixing up the plot cosmetics:
         if options.cosmetics :
@@ -108,48 +123,63 @@ def main(options,args) :
             for et in range(len(et_bins)-1) :
                 for eta in range(len(eta_bins)-1) :
 
-                    for sample in samples :
-                        passing = rand.Poisson(1000)
-                        failing = rand.Poisson(100)
-                        denominators[sample].SetBinContent(et+1,eta+1,passing+failing)
-                        denominators[sample].SetBinError  (et+1,eta+1,0.01)
-                        numerators[sample].SetBinContent  (et+1,eta+1,passing)
-                        numerators[sample].SetBinError    (et+1,eta+1,0.01)
+                    for conf in used_confs :
+                        for sample in samples :
+                            passing = rand.Poisson(1000)
+                            failing = rand.Poisson(100)
+                            denominators[conf][sample].SetBinContent(et+1,eta+1,passing+failing)
+                            denominators[conf][sample].SetBinError  (et+1,eta+1,0.01)
+                            numerators[conf][sample].SetBinContent  (et+1,eta+1,passing)
+                            numerators[conf][sample].SetBinError    (et+1,eta+1,0.01)
 
             ## End eta block
         ## End Et block
 
-        # general setup of tight ID menu
-        # There is a general quirk with the conf files on bin thresholds vs bins:
-        # Eta: nbins = nthresholds (0 is implied as a threshold)
-        # Et: nbins = nthresholds + 1 (0 and inf are implied as thresholds)
-        etbins_tight  = idhelpers.GetCutValuesFromConf(confs['tight'],'CutBinEnergy',status)
-        etabins_tight =  idhelpers.GetCutValuesFromConf(confs['tight'],'CutBinEta',status)
-        n_et_tight  = 1 + len(etbins_tight) # see note above
-        n_eta_tight = len(etabins_tight)
-        tight_id = ROOT.photonID(n_et_tight,n_eta_tight)
-        tight_id.Set_EtaBinThresholds(array('d',etabins_tight))
-        if etbins_tight :
-            tight_id.Set_EtBinThresholds(array('d',etbins_tight))
+        photonIDs = dict()
+        for c in used_confs :
+            # general setup of tight ID menu
+            # There is a general quirk with the conf files on bin thresholds vs bins:
+            # Eta: nbins = nthresholds (0 is implied as a threshold)
+            # Et: nbins = nthresholds + 1 (0 and inf are implied as thresholds)
+            etbins_conf  = idhelpers.GetCutValuesFromConf(confs[c],'CutBinEnergy',status)
+            etabins_conf =  idhelpers.GetCutValuesFromConf(confs[c],'CutBinEta',status)
+            n_et  = 1 + len(etbins_conf) # see note above
+            n_eta = len(etabins_conf)
+            photonIDs[c] = ROOT.photonID(n_et,n_eta)
+            photonIDs[c].Set_EtaBinThresholds(array('d',etabins_conf))
+            if etbins_conf :
+                photonIDs[c].Set_EtBinThresholds(array('d',etbins_conf))
 
-        for var in variables.keys() :
-            cut_values = idhelpers.GetCutValuesFromConf(confs['tight'],var,status)
-            if not cut_values :
-                continue
-            cut_values = array('d',cut_values)
-            getattr(tight_id,'Set_%s'%(var))(cut_values)
+            # Add each cut
+            for var in variables.keys() :
+                cut_values = idhelpers.GetCutValuesFromConf(confs[c],var,status)
+                if not cut_values :
+                    continue
+                cut_values = array('d',cut_values)
+                getattr(photonIDs[c],'Set_%s'%(var))(cut_values)
 
-        # New Radiative-Z efficiency method:
+
+        # New efficiency method:
         for sample in samples :
             print 'Evaluating %s signal ID...'%(sample)
-            ROOT.EvaluatePhotonID_InclusivePhoton(trees[sample],
-                                                  tight_id,
-                                                  status == 'Converted',
-                                                  denominators[sample],
-                                                  numerators[sample])
+            doTruthMatchPhoton = True
+            doTruthMatchFake = False
+            if sample == 'jf' :
+                doTruthMatchPhoton = False
+                doTruthMatchFake = True
 
-            # Divide (using Binomial errors)
-            numerators[sample].Divide(numerators[sample],denominators[sample],1,1,'B')
+            for conf in used_confs :
+                ROOT.EvaluatePhotonID(trees[sample],
+                                      photonIDs[conf],
+                                      status == 'Converted',
+                                      denominators[conf][sample],
+                                      numerators[conf][sample],
+                                      None,
+                                      doTruthMatchPhoton, doTruthMatchFake
+                                      )
+
+                # Divide (using Binomial errors)
+                numerators[conf][sample].Divide(numerators[conf][sample],denominators[conf][sample],1,1,'B')
 
         ##
         ## "Compressed" plots (lots of plots on the same canvas)
@@ -157,11 +187,14 @@ def main(options,args) :
         can = ROOT.TCanvas('can_pt_%s'%(status),'blah',600,900);
         pads = []
         hists_ptplot = dict()
-        for sample in samples :
-            hists_ptplot[sample] = []
+        for conf in used_confs :
+            hists_ptplot[conf] = dict()
+            for sample in samples :
+                hists_ptplot[conf][sample] = []
 
         bm = 0.08 # bottom margin
         padheight = (1-bm-0.04)/float(len(eta_bins)-2)
+        miny,maxy=9e12,-9e12
         for eta in range(len(eta_bins)-1) :
             if eta == 4 : continue
             eta1 = eta - 1*(eta>4)
@@ -169,13 +202,22 @@ def main(options,args) :
 
             current_hists = []
 
-            for sample in samples :
-                name = numerators[sample].GetName()+'_eta%d'%(eta+1)
-                numerators[sample].ProjectionX(name,eta+1,eta+1)
-                hists_ptplot[sample].append(ROOT.gDirectory.Get(name))
-                hists_ptplot[sample][-1].SetMarkerColor(colors[sample])
-                hists_ptplot[sample][-1].SetLineColor(colors[sample])
-                current_hists.append(hists_ptplot[sample][-1])
+            for conf in used_confs :
+                for sample in samples :
+                    name = numerators[conf][sample].GetName()+'_eta%d'%(eta+1)
+                    numerators[conf][sample].ProjectionX(name,eta+1,eta+1)
+                    hists_ptplot[conf][sample].append(ROOT.gDirectory.Get(name))
+
+                    if len(samples) == 1 and len(used_confs) > 1 :
+                        hists_ptplot[conf][sample][-1].SetTitle(conf)
+
+                    if len(used_confs) == 1 :
+                        hists_ptplot[conf][sample][-1].SetMarkerColor(colors[sample])
+                        hists_ptplot[conf][sample][-1].SetLineColor(colors[sample])
+                    else :
+                        hists_ptplot[conf][sample][-1].SetMarkerColor(colors[conf])
+                        hists_ptplot[conf][sample][-1].SetLineColor(colors[conf])
+                    current_hists.append(hists_ptplot[conf][sample][-1])
 
             drawopt = 'pE'
             if eta1 > 0 :
@@ -191,13 +233,14 @@ def main(options,args) :
                 plotfunc.AddHistogram(pads[-1],h,drawopt)
 
             plotfunc.FormatCanvasAxes(pads[-1])
+            tmp_miny,tmp_maxy = taxisfunc.AutoFixYaxis(pads[-1])
+            miny,maxy = min(miny,tmp_miny),max(maxy,tmp_maxy)
 
             for h in list(pads[-1].GetListOfPrimitives()) :
                 if not issubclass(type(h),ROOT.TH1) :
                     continue
 
                 h.SetMarkerSize(0.6)
-                h.GetYaxis().SetRangeUser(.4001,0.999)
                 h.GetYaxis().SetNdivisions(5,5,0)
                 h.GetYaxis().SetTitleSize(16)
                 h.GetYaxis().SetTitleOffset(2.3)
@@ -222,6 +265,10 @@ def main(options,args) :
             if eta == 0 :
                 # Legend
                 plotfunc.MakeLegend(pads[-1],.57,.47,.7,.75,option='pE',totalentries=1)
+
+        for pad in pads :
+            miny = max(miny,0)
+            taxisfunc.SetYaxisRanges(pad,miny+0.0001,maxy-0.0001)
 
         status1 = 'Converted' if status == 'Converted' else 'Unconverted'
         text = ROOT.TLatex()
