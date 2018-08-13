@@ -144,7 +144,12 @@ struct photonID
   void Set_EtBinThresholds (Double_t* c){for (int i=0; i < net-1 ; i++) EtBinThresholds [i] = c[i]; }
 };
 
-void EvaluatePhotonID(TTree* tree, photonID* iddef,bool doConv, TH2* denominator, TH2* numerator,photonVariables* hists = NULL,bool doTruthMatchPhoton = true, bool doTruthMatchFake = false){
+void EvaluatePhotonID(TTree* tree, photonID* iddef,bool doConv, TH2* denominator, TH2* numerator,
+                      photonVariables* hists = NULL,
+                      bool doTruthMatchPhoton = true,
+                      bool doTruthMatchFake = false,
+                      bool doIsolationPreselection = false)
+{
 
   float y_pt, y_eta_cl_s2,y_Reta,y_Rphi,y_weta2,y_fracs1,y_weta1,y_f1,y_wtots1,y_Rhad,y_Rhad1;
   float y_Eratio,y_e277,y_deltae;
@@ -152,6 +157,7 @@ void EvaluatePhotonID(TTree* tree, photonID* iddef,bool doConv, TH2* denominator
   bool y_isTruthMatchedPhoton;
   double mcTotWeightNoPU_PIDuse;
   float mc_weight_pu,mc_weight_gen;
+  bool y_iso_FixedCutLoose;
 
   bool isRz = tree->GetListOfBranches()->FindObject("ph.pt");
   bool isMC = tree->GetListOfBranches()->FindObject("mc_weight.gen") || tree->GetListOfBranches()->FindObject("mcTotWeightNoPU_PIDuse");
@@ -169,6 +175,9 @@ void EvaluatePhotonID(TTree* tree, photonID* iddef,bool doConv, TH2* denominator
   tree->SetBranchAddress(isRz ? "ph.rhad1"   : "y_Rhad1"    ,&y_Rhad1 );
   tree->SetBranchAddress(isRz ? "ph.rhad"    : "y_Rhad"     ,&y_Rhad  );
   tree->SetBranchAddress(isRz ? "ph.convFlag": "y_convType" ,&y_convType);
+  if (doIsolationPreselection) {
+    tree->SetBranchAddress(isRz ? "ph.isoloose": "y_iso_FixedCutLoose" ,&y_iso_FixedCutLoose);
+  }
   // f1
   // e277
   if (isMC) {
@@ -241,6 +250,7 @@ void EvaluatePhotonID(TTree* tree, photonID* iddef,bool doConv, TH2* denominator
     bool passDen = true;
     if (!isRz && doTruthMatchPhoton) passDen = passDen &&  y_isTruthMatchedPhoton;
     if (!isRz && doTruthMatchFake  ) passDen = passDen && !y_isTruthMatchedPhoton;
+    if (doIsolationPreselection    ) passDen = passDen &&  y_iso_FixedCutLoose   ;
     if (!passDen) continue;
     
     double weight = 1;

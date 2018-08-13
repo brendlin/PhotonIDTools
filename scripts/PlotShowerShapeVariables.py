@@ -84,7 +84,8 @@ def main(options,args) :
                                   status == 'Converted',
                                   denominator_tmp,
                                   numerator_tmp,
-                                  variables_rz)
+                                  variables_rz,
+                                  True,False,options.FixedCutLoose)
 
         # Radiative-Z data:
         if options.radzdata :
@@ -94,7 +95,8 @@ def main(options,args) :
                                   status == 'Converted',
                                   denominator_tmp,
                                   numerator_tmp,
-                                  variables_rzd)
+                                  variables_rzd,
+                                  True,False,options.FixedCutLoose)
 
         # New Single Photon efficiency method:
         if options.singlephotonsignal :
@@ -104,8 +106,8 @@ def main(options,args) :
                                   status == 'Converted',
                                   denominator_tmp,
                                   numerator_tmp,
-                                  variables_sp)
-
+                                  variables_sp,
+                                  True,False,options.FixedCutLoose)
 
         # Process the cuts and the histograms
         for var in list(variables_rz.variables) :
@@ -328,6 +330,8 @@ if __name__ == '__main__':
 
     p.add_option('--singlephotonsignal'  ,type = 'string', default = '', dest = 'singlephotonsignal' ,help = 'Single photon Signal file' )
     p.add_option('--singlephotontreename',type = 'string', default = 'SinglePhoton', dest = 'singlephotontreename' ,help = 'Single photon treename' )
+
+    p.add_option('--FixedCutLoose',action='store_true',default=False,dest='FixedCutLoose',help='apply FixedCutLoose preselection')
 
     p.add_option('--outdir',type='string',default='.',dest='outdir',help='output directory')
 
