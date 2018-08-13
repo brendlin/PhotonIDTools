@@ -37,30 +37,30 @@ def main(options,args) :
         print 'Using %s for %s'%(getattr(options,confstr),confstr)
         confs[confstr] = ROOT.TEnv(getattr(options,confstr))
 
+    # Assume for now that Strips and non-strips binning is the same
+    eta_bins = [0,0.6,0.8,1.15,1.37,1.52,1.81,2.01,2.37,2.47]
+    print eta_bins
+
+    # Assume for now that Strips and non-strips binning is the same
+    et_bins = [10000,15000,20000,25000,30000,35000,40000,45000,50000,60000,80000,100000]
+    print et_bins
+
+    # Make dummy histograms, because the "EvaluatePhotonID" function needs it
+    args = len(et_bins)-1,array('d',list(a/1000. for a in et_bins)),len(eta_bins)-1,array('d',eta_bins)
+    numerator_tmp   = ROOT.TH2F('DUMMY_num','DUMMY',*args)
+    denominator_tmp = ROOT.TH2F('DUMMY_den','DUMMY',*args)
+
     for status in ['Converted','NonConverted'] :
 
         print 'Making plots for %s'%(status)
 
         files_rz,trees_rz,keys_rz = anaplot.GetTreesFromFiles(options.radzsignal,treename=options.radztreename)
+        files_rzd,trees_rzd,keys_rzd = anaplot.GetTreesFromFiles(options.radzdata,treename=options.radztreename)
         files_sp,trees_sp,keys_sp = anaplot.GetTreesFromFiles(options.singlephotonsignal,treename=options.singlephotontreename)
 
-        # Assume for now that Strips and non-strips binning is the same
-        eta_bins = [0,0.6,0.8,1.15,1.37,1.52,1.81,2.01,2.37,2.47]
-        print eta_bins
-
-        # Assume for now that Strips and non-strips binning is the same
-        et_bins = [10000,15000,20000,25000,30000,35000,40000,45000,50000,60000,80000,100000]
-        print et_bins
-
-        args = len(et_bins)-1,array('d',list(a/1000. for a in et_bins)),len(eta_bins)-1,array('d',eta_bins)
-        numerator_rz   = ROOT.TH2F('numerator_%s_%s'  %(status,'radz'),'Z#rightarrow^{}ll#gamma MC (fudged)',*args)
-        denominator_rz = ROOT.TH2F('denominator_%s_%s'%(status,'radz'),'Z#rightarrow^{}ll#gamma MC (fudged)',*args)
-
-        numerator_sp   = ROOT.TH2F('numerator_%s_%s'  %(status,'incl'),'Inclusive #gamma MC (fudged)'       ,*args)
-        denominator_sp = ROOT.TH2F('denominator_%s_%s'%(status,'incl'),'Inclusive #gamma MC (fudged)'       ,*args)
-
-        variables_rz = ROOT.photonVariables('RadZ_%s'        %(status),numerator_rz.GetNbinsX(),numerator_rz.GetNbinsY(),status == 'Converted')
-        variables_sp = ROOT.photonVariables('SinglePhoton_%s'%(status),numerator_sp.GetNbinsX(),numerator_sp.GetNbinsY(),status == 'Converted')
+        variables_rz  = ROOT.photonVariables('RadZ_%s'        %(status),numerator_tmp.GetNbinsX(),numerator_tmp.GetNbinsY(),status == 'Converted')
+        variables_rzd = ROOT.photonVariables('RadZ_data_%s'   %(status),numerator_tmp.GetNbinsX(),numerator_tmp.GetNbinsY(),status == 'Converted')
+        variables_sp  = ROOT.photonVariables('SinglePhoton_%s'%(status),numerator_tmp.GetNbinsX(),numerator_tmp.GetNbinsY(),status == 'Converted')
 
         # general setup of tight ID menu
         etbins_tight  = idhelpers.GetCutValuesFromConf(confs['tight'],'CutBinEnergy',status)
@@ -82,9 +82,19 @@ def main(options,args) :
             ROOT.EvaluatePhotonID(trees_rz[keys_rz[0]],
                                   tight_id,
                                   status == 'Converted',
-                                  denominator_rz,
-                                  numerator_rz,
+                                  denominator_tmp,
+                                  numerator_tmp,
                                   variables_rz)
+
+        # Radiative-Z data:
+        if options.radzdata :
+            print 'Evaluating Radiative-Z Data ID...'
+            ROOT.EvaluatePhotonID(trees_rzd[keys_rzd[0]],
+                                  tight_id,
+                                  status == 'Converted',
+                                  denominator_tmp,
+                                  numerator_tmp,
+                                  variables_rzd)
 
         # New Single Photon efficiency method:
         if options.singlephotonsignal :
@@ -92,8 +102,8 @@ def main(options,args) :
             ROOT.EvaluatePhotonID(trees_sp[keys_sp[0]],
                                   tight_id,
                                   status == 'Converted',
-                                  denominator_sp,
-                                  numerator_sp,
+                                  denominator_tmp,
+                                  numerator_tmp,
                                   variables_sp)
 
 
@@ -117,6 +127,7 @@ def main(options,args) :
                 labels = list(template%(et_bins[a]/1000,et_bins[a+1]/1000) for a in range(len(et_bins)-1))
 
                 radz_hists = []
+                radz_data_hists = []
                 singlephoton_hists = []
 
                 def GetCutsGraph(gr_title) :
@@ -158,12 +169,20 @@ def main(options,args) :
                     if options.radzsignal :
                         radz_hists.append(getattr(variables_rz,'h_%s'%(var))[et*variables_rz.neta + eta])
                         radz_hists[-1].SetTitle('Z#rightarrow^{}ll#gamma MC (fudged)')
-                        radz_hists[-1].SetLineColor(ROOT.kBlack)
+                        radz_hists[-1].SetLineColor(ROOT.kAzure-2)
                         radz_hists[-1].SetLineWidth(2)
+
+                    if options.radzdata :
+                        radz_data_hists.append(getattr(variables_rzd,'h_%s'%(var))[et*variables_rzd.neta + eta])
+                        radz_data_hists[-1].SetTitle('Z#rightarrow^{}ll#gamma data')
+                        radz_data_hists[-1].SetLineColor(ROOT.kBlack)
+                        radz_data_hists[-1].SetMarkerSize(0.5)
+                        radz_data_hists[-1].SetOption('pE')
+                        radz_data_hists[-1].SetLineWidth(2)
 
                     if options.singlephotonsignal :
                         singlephoton_hists.append(getattr(variables_sp,'h_%s'%(var))[et*variables_sp.neta + eta])
-                        singlephoton_hists[-1].SetTitle('Inclusive photons (fudged)')
+                        singlephoton_hists[-1].SetTitle('Inclusive photons MC (fudged)')
                         singlephoton_hists[-1].SetLineColor(ROOT.kRed+1)
                         singlephoton_hists[-1].SetLineWidth(2)
 
@@ -179,6 +198,9 @@ def main(options,args) :
                             etbins_tight  = [0] + list(int(a) for a in etbins_tight)
                             if et_bins[et] > etbins_tight[-1] :
                                 et_cutvalues = len(etbins_tight)-1
+                            elif et_bins[et] < etbins_tight[1] :
+                                # bins between 0 and the first bin
+                                et_cutvalues = 0
                             else :
                                 et_cutvalues = etbins_tight.index(int(et_bins[et]))
 
@@ -196,7 +218,7 @@ def main(options,args) :
                 # Individual canvas
                 if False :
                     can = ROOT.TCanvas('can_%s_%s_%s'%(var,status,eta),'blah',520,700)
-                    ShowerShapeEvolutionPlot(can,labels,radz_hists,singlephoton_hists)
+                    ShowerShapeEvolutionPlot(can,labels,radz_hists,singlephoton_hists,radz_data_hists)
                     plotfunc.AddHistogram(can,cuts_graphs['loose'],drawopt='l')
                     plotfunc.AddHistogram(can,cuts_graphs['tight'],drawopt='l')
                     if options.menu3 :
@@ -221,7 +243,7 @@ def main(options,args) :
                     can_barrel.cd() if (eta < 5) else can_endcap.cd()
                     eta1 = eta%5
                     pads.append(ROOT.TPad('pad_%s_%s_%s'%(var,status,eta),'blah',(172*(eta1>0) + eta1*348)/1564.,0,(172 + 348*(eta1+1))/1564.,1))
-                    ShowerShapeEvolutionPlot(pads[-1],labels,radz_hists,singlephoton_hists)
+                    ShowerShapeEvolutionPlot(pads[-1],labels,radz_hists,singlephoton_hists,radz_data_hists)
                     plotfunc.AddHistogram(pads[-1],cuts_graphs['loose'],drawopt='l')
                     plotfunc.AddHistogram(pads[-1],cuts_graphs['tight'],drawopt='l')
                     if options.menu3 :
@@ -265,6 +287,7 @@ def main(options,args) :
 
             if not os.path.exists('%s/%s'%(options.outdir,status)) :
                 os.makedirs('%s/%s'%(options.outdir,status))
+
             can_barrel.Print('%s/%s/barrel_%s_%s.pdf'%(options.outdir,status,var,status))
             can_endcap.Print('%s/%s/endcap_%s_%s.pdf'%(options.outdir,status,var,status))
 
@@ -300,6 +323,7 @@ if __name__ == '__main__':
     p.add_option('--names',type = 'string', default = '', dest = 'names',help = 'Menu names, comma-separated (tight,loose,menu3,menu4')
 
     p.add_option('--radzsignal'  ,type = 'string', default = '', dest = 'radzsignal' ,help = 'Radiative-Z Signal file' )
+    p.add_option('--radzdata'    ,type = 'string', default = '', dest = 'radzdata'   ,help = 'Radiative-Z Data file'   )
     p.add_option('--radztreename',type = 'string', default = 'output', dest = 'radztreename' ,help = 'Radiative-Z treename' )
 
     p.add_option('--singlephotonsignal'  ,type = 'string', default = '', dest = 'singlephotonsignal' ,help = 'Single photon Signal file' )

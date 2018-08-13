@@ -26,11 +26,12 @@ struct photonVariables
         TString nm_tmp = Form("%s_%d_%d",name,et,eta);
         const char* nm = nm_tmp.Data();
         double rphi_lo = (isConv) ? 0.45 : 0.75;
+        double fside_hi = (eta > 5) ? 0.5990 : 0.7990;
         h_CutHadLeakage.push_back(new TH1F(Form("CutHadLeakage_%s",nm),"CutHadLeakage",100,  -0.03,     0.07));
         h_Reta37       .push_back(new TH1F(Form("Reta37_%s"       ,nm),"Reta37"       ,100,   0.80,    1.010));
         h_Rphi33       .push_back(new TH1F(Form("Rphi33_%s"       ,nm),"Rphi33"       ,100,rphi_lo,     1.00));
         h_weta2        .push_back(new TH1F(Form("weta2_%s"        ,nm),"weta2"        ,100, 0.0065, 0.015990));
-        h_fracm        .push_back(new TH1F(Form("fracm_%s"        ,nm),"fracm"        ,100,  0.001,   0.7990));
+        h_fracm        .push_back(new TH1F(Form("fracm_%s"        ,nm),"fracm"        ,100,  0.001,  fside_hi));
         h_wtot         .push_back(new TH1F(Form("wtot_%s"         ,nm),"wtot"         ,100,      1,   4.9990));
         h_w1           .push_back(new TH1F(Form("w1_%s"           ,nm),"w1"           ,100,   0.45,    0.850));
         h_deltae       .push_back(new TH1F(Form("deltae_%s"       ,nm),"deltae"       ,100, 0.0001,   799.90));
@@ -153,6 +154,7 @@ void EvaluatePhotonID(TTree* tree, photonID* iddef,bool doConv, TH2* denominator
   float mc_weight_pu,mc_weight_gen;
 
   bool isRz = tree->GetListOfBranches()->FindObject("ph.pt");
+  bool isMC = tree->GetListOfBranches()->FindObject("mc_weight.gen") || tree->GetListOfBranches()->FindObject("mcTotWeightNoPU_PIDuse");
 
   tree->SetBranchAddress(isRz ? "ph.pt"      : "y_pt"       ,&y_pt  );
   tree->SetBranchAddress(isRz ? "ph.eta2"    : "y_eta_cl_s2",&y_eta_cl_s2);
@@ -169,12 +171,14 @@ void EvaluatePhotonID(TTree* tree, photonID* iddef,bool doConv, TH2* denominator
   tree->SetBranchAddress(isRz ? "ph.convFlag": "y_convType" ,&y_convType);
   // f1
   // e277
-  if (isRz) {
-    tree->SetBranchAddress("mc_weight.pu" ,&mc_weight_pu);
-    tree->SetBranchAddress("mc_weight.gen",&mc_weight_gen);
-  } else {
-    tree->SetBranchAddress("y_isTruthMatchedPhoton",&y_isTruthMatchedPhoton);
-    tree->SetBranchAddress("mcTotWeightNoPU_PIDuse",&mcTotWeightNoPU_PIDuse);
+  if (isMC) {
+    if (isRz) {
+      tree->SetBranchAddress("mc_weight.pu" ,&mc_weight_pu);
+      tree->SetBranchAddress("mc_weight.gen",&mc_weight_gen);
+    } else {
+      tree->SetBranchAddress("y_isTruthMatchedPhoton",&y_isTruthMatchedPhoton);
+      tree->SetBranchAddress("mcTotWeightNoPU_PIDuse",&mcTotWeightNoPU_PIDuse);
+    }
   }
 
   TAxis* xaxis = denominator->GetXaxis();
@@ -239,7 +243,8 @@ void EvaluatePhotonID(TTree* tree, photonID* iddef,bool doConv, TH2* denominator
     if (!isRz && doTruthMatchFake  ) passDen = passDen && !y_isTruthMatchedPhoton;
     if (!passDen) continue;
     
-    double weight = isRz ? mc_weight_pu*mc_weight_gen : mcTotWeightNoPU_PIDuse;
+    double weight = 1;
+    if (isMC) weight = isRz ? mc_weight_pu*mc_weight_gen : mcTotWeightNoPU_PIDuse;
 
     double the_rhad = y_Rhad1;
     if ( 0.8 < fabs(y_eta_cl_s2) && fabs(y_eta_cl_s2) < 1.37 ) the_rhad = y_Rhad;
