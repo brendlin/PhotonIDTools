@@ -115,8 +115,8 @@ def main(options,args) :
             # Reset PlotFunctions tobject_collector
             del plotfunc.tobject_collector[:]
 
-            can_barrel = ROOT.TCanvas('can_%s_%s_barrel'%(var,status),'blah',int(1464),700)
-            can_endcap = ROOT.TCanvas('can_%s_%s_endcap'%(var,status),'blah',int(1464),700)
+            can_barrel = ROOT.TCanvas('can_%s_%s_barrel'%(var,status),'blah',int(1464),959)
+            can_endcap = ROOT.TCanvas('can_%s_%s_endcap'%(var,status),'blah',int(1464),959)
             pads = []
 
             for eta in range(len(eta_bins)-1) :
@@ -252,6 +252,8 @@ def main(options,args) :
                         plotfunc.AddHistogram(pads[-1],cuts_graphs['menu3'],drawopt='l')
                     if options.menu4 :
                         plotfunc.AddHistogram(pads[-1],cuts_graphs['menu4'],drawopt='l')
+
+                    pads[-1].SetBottomMargin(0.06)
                     if not eta1 :
                         plotfunc.SetLeftMargin(pads[-1],0.33)
                     if eta1 :
