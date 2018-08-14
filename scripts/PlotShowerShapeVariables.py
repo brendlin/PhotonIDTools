@@ -46,7 +46,7 @@ def main(options,args) :
     print et_bins
 
     # Make dummy histograms, because the "EvaluatePhotonID" function needs it
-    args = len(et_bins)-1,array('d',list(a/1000. for a in et_bins)),len(eta_bins)-1,array('d',eta_bins)
+    args = len(et_bins)-1,array('f',list(a/1000. for a in et_bins)),len(eta_bins)-1,array('f',eta_bins)
     numerator_tmp   = ROOT.TH2F('DUMMY_num','DUMMY',*args)
     denominator_tmp = ROOT.TH2F('DUMMY_den','DUMMY',*args)
 
@@ -68,12 +68,12 @@ def main(options,args) :
         n_et_tight  = 1 + len(etbins_tight) # see note above
         n_eta_tight = len(etabins_tight)
         tight_id = ROOT.photonID(n_et_tight,n_eta_tight)
-        tight_id.Set_EtaBinThresholds(array('d',etabins_tight))
-        tight_id.Set_EtBinThresholds(array('d',etbins_tight))
+        tight_id.Set_EtaBinThresholds(array('f',etabins_tight))
+        tight_id.Set_EtBinThresholds(array('f',etbins_tight))
 
         for var in list(variables_rz.variables) :
             cut_values = idhelpers.GetCutValuesFromConf(confs['tight'],var,status)
-            cut_values = array('d',cut_values)
+            cut_values = array('f',cut_values)
             getattr(tight_id,'Set_%s'%(var))(cut_values)
 
         # New Radiative-Z efficiency method:
@@ -134,8 +134,8 @@ def main(options,args) :
 
                 def GetCutsGraph(gr_title) :
                     tmp_gr = ROOT.TGraph(2*len(et_bins)-2,
-                                         array('d',[0]*(2*len(et_bins)-2)),
-                                         array('d',[0]*(2*len(et_bins)-2)))
+                                         array('f',[0]*(2*len(et_bins)-2)),
+                                         array('f',[0]*(2*len(et_bins)-2)))
                     tmp_gr.SetTitle(gr_title)
                     tmp_gr.SetName('%s_%s_%s_%d'%(gr_title.replace(' ','_'),var,status,eta))
                     tmp_gr.SetLineWidth(1)

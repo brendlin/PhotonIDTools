@@ -102,7 +102,7 @@ def main(options,args) :
         et_bins = [10000,15000,20000,25000,30000,35000,40000,45000,50000,60000,80000,100000]
         print et_bins
 
-        args = len(et_bins)-1,array('d',list(a/1000. for a in et_bins)),len(eta_bins)-1,array('d',eta_bins)
+        args = len(et_bins)-1,array('f',list(a/1000. for a in et_bins)),len(eta_bins)-1,array('f',eta_bins)
 
         numerators = dict()
         denominators = dict()
@@ -146,16 +146,16 @@ def main(options,args) :
             n_et  = 1 + len(etbins_conf) # see note above
             n_eta = len(etabins_conf)
             photonIDs[c] = ROOT.photonID(n_et,n_eta)
-            photonIDs[c].Set_EtaBinThresholds(array('d',etabins_conf))
+            photonIDs[c].Set_EtaBinThresholds(array('f',etabins_conf))
             if etbins_conf :
-                photonIDs[c].Set_EtBinThresholds(array('d',etbins_conf))
+                photonIDs[c].Set_EtBinThresholds(array('f',etbins_conf))
 
             # Add each cut
             for var in variables.keys() :
                 cut_values = idhelpers.GetCutValuesFromConf(confs[c],var,status)
                 if not cut_values :
                     continue
-                cut_values = array('d',cut_values)
+                cut_values = array('f',cut_values)
                 getattr(photonIDs[c],'Set_%s'%(var))(cut_values)
 
 
@@ -279,7 +279,11 @@ def main(options,args) :
         can.Update()
         if not os.path.exists('%s'%(options.outdir)) :
             os.makedirs('%s'%(options.outdir))
-        can.Print('%s/Efficiency_VersusPt_%s.pdf'%(options.outdir,status))
+
+        outputname = 'Efficiency'
+        if options.jetfilteredbackground :
+            outputname = 'BkgEfficiency'
+        can.Print('%s/%s_VersusPt_%s.pdf'%(options.outdir,outputname,status))
 
     ## End compressed plots
 
