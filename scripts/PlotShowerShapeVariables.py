@@ -54,13 +54,47 @@ def main(options,args) :
 
         print 'Making plots for %s'%(status)
 
-        files_rz,trees_rz,keys_rz = anaplot.GetTreesFromFiles(options.radzsignal,treename=options.radztreename)
-        files_rzd,trees_rzd,keys_rzd = anaplot.GetTreesFromFiles(options.radzdata,treename=options.radztreename)
-        files_sp,trees_sp,keys_sp = anaplot.GetTreesFromFiles(options.singlephotonsignal,treename=options.singlephotontreename)
+        trees = dict()
 
-        variables_rz  = ROOT.photonVariables('RadZ_%s'        %(status),numerator_tmp.GetNbinsX(),numerator_tmp.GetNbinsY(),status == 'Converted')
-        variables_rzd = ROOT.photonVariables('RadZ_data_%s'   %(status),numerator_tmp.GetNbinsX(),numerator_tmp.GetNbinsY(),status == 'Converted')
-        variables_sp  = ROOT.photonVariables('SinglePhoton_%s'%(status),numerator_tmp.GetNbinsX(),numerator_tmp.GetNbinsY(),status == 'Converted')
+        files_rz ,trees_rz ,keys_rz  = anaplot.GetTreesFromFiles(options.radzsignal        ,treename=options.radztreename        )
+        files_rzd,trees_rzd,keys_rzd = anaplot.GetTreesFromFiles(options.radzdata          ,treename=options.radztreename        )
+        files_sp ,trees_sp ,keys_sp  = anaplot.GetTreesFromFiles(options.singlephotonsignal,treename=options.singlephotontreename)
+        files_spd,trees_spd,keys_spd = anaplot.GetTreesFromFiles(options.singlephotondata  ,treename=options.singlephotontreename)
+        files_jf ,trees_jf ,keys_jf  = anaplot.GetTreesFromFiles(options.jetfiltered       ,treename=options.singlephotontreename)
+
+        trees['radz']      = trees_rz [keys_rz [0]] if keys_rz  else None
+        trees['radz_data'] = trees_rzd[keys_rzd[0]] if keys_rzd else None
+        trees['incl']      = trees_sp [keys_sp [0]] if keys_sp  else None
+        trees['incl_data'] = trees_spd[keys_spd[0]] if keys_spd else None
+        trees['jf']        = trees_jf [keys_jf [0]] if keys_jf  else None
+
+        variables = dict()
+        variables['radz']      = ROOT.photonVariables('RadZ_%s'             %(status),numerator_tmp.GetNbinsX(),numerator_tmp.GetNbinsY(),status == 'Converted')
+        variables['radz_data'] = ROOT.photonVariables('RadZ_data_%s'        %(status),numerator_tmp.GetNbinsX(),numerator_tmp.GetNbinsY(),status == 'Converted')
+        variables['incl']      = ROOT.photonVariables('SinglePhoton_%s'     %(status),numerator_tmp.GetNbinsX(),numerator_tmp.GetNbinsY(),status == 'Converted')
+        variables['incl_data'] = ROOT.photonVariables('SinglePhoton_data_%s'%(status),numerator_tmp.GetNbinsX(),numerator_tmp.GetNbinsY(),status == 'Converted')
+        variables['jf']        = ROOT.photonVariables('Jetfiltered_%s'      %(status),numerator_tmp.GetNbinsX(),numerator_tmp.GetNbinsY(),status == 'Converted')
+
+        doSample = dict()
+        doSample['radz']      = options.radzsignal
+        doSample['radz_data'] = options.radzdata
+        doSample['incl']      = options.singlephotonsignal
+        doSample['incl_data'] = options.singlephotondata
+        doSample['jf']        = options.jetfiltered
+
+        colors = dict()
+        colors['radz']      = ROOT.kAzure-2
+        colors['radz_data'] = ROOT.kBlack
+        colors['incl']      = ROOT.kRed+1
+        colors['incl_data'] = ROOT.kGray+2 if doSample['radz_data'] else ROOT.kBlack
+        colors['jf']        = ROOT.kGreen+1
+
+        titles = dict()
+        titles['radz']      = 'Z#rightarrow^{}ll#gamma MC (fudged)'
+        titles['radz_data'] = 'Z#rightarrow^{}ll#gamma data'
+        titles['incl']      = 'Inclusive photons MC (fudged)'
+        titles['incl_data'] = 'Inclusive photons data'
+        titles['jf']        = 'Jet-filtered MC (fudged)'
 
         # general setup of tight ID menu
         etbins_tight  = idhelpers.GetCutValuesFromConf(confs['tight'],'CutBinEnergy',status)
@@ -71,46 +105,42 @@ def main(options,args) :
         tight_id.Set_EtaBinThresholds(array('f',etabins_tight))
         tight_id.Set_EtBinThresholds(array('f',etbins_tight))
 
-        for var in list(variables_rz.variables) :
+        for var in list(variables['radz'].variables) :
             cut_values = idhelpers.GetCutValuesFromConf(confs['tight'],var,status)
             cut_values = array('f',cut_values)
             getattr(tight_id,'Set_%s'%(var))(cut_values)
 
-        # New Radiative-Z efficiency method:
-        if options.radzsignal :
-            print 'Evaluating Radiative-Z signal ID...'
-            ROOT.EvaluatePhotonID(trees_rz[keys_rz[0]],
-                                  tight_id,
-                                  status == 'Converted',
-                                  denominator_tmp,
-                                  numerator_tmp,
-                                  variables_rz,
-                                  True,False,options.FixedCutLoose)
+        # Evaluate photon ID for each of the samples
+        for sample in trees.keys() :
+            if not doSample[sample] :
+                continue
+            print 'Evaluating ID for %s'%(sample)
 
-        # Radiative-Z data:
-        if options.radzdata :
-            print 'Evaluating Radiative-Z Data ID...'
-            ROOT.EvaluatePhotonID(trees_rzd[keys_rzd[0]],
-                                  tight_id,
-                                  status == 'Converted',
-                                  denominator_tmp,
-                                  numerator_tmp,
-                                  variables_rzd,
-                                  True,False,options.FixedCutLoose)
+            doTruthMatchPhoton = {'radz'     :False,
+                                  'radz_data':False,
+                                  'incl'     :True,
+                                  'incl_data':False,
+                                  'jf'       :False,
+                                  }.get(sample)
+            doTruthMatchFake = {'radz'     :False,
+                                'radz_data':False,
+                                'incl'     :False,
+                                'incl_data':False,
+                                'jf'       :True,
+                                }.get(sample)
 
-        # New Single Photon efficiency method:
-        if options.singlephotonsignal :
-            print 'Evaluating Single-photon signal ID...'
-            ROOT.EvaluatePhotonID(trees_sp[keys_sp[0]],
+            ROOT.EvaluatePhotonID(trees[sample],
                                   tight_id,
                                   status == 'Converted',
                                   denominator_tmp,
                                   numerator_tmp,
-                                  variables_sp,
-                                  True,False,options.FixedCutLoose)
+                                  variables[sample],
+                                  doTruthMatchPhoton,
+                                  doTruthMatchFake,
+                                  options.FixedCutLoose)
 
         # Process the cuts and the histograms
-        for var in list(variables_rz.variables) :
+        for var in list(variables['radz'].variables) :
 
             # Reset PlotFunctions tobject_collector
             del plotfunc.tobject_collector[:]
@@ -128,9 +158,9 @@ def main(options,args) :
                 template = '%2.0f^{ }<^{ }p_{T}^{ }<^{ }%2.0f GeV'
                 labels = list(template%(et_bins[a]/1000,et_bins[a+1]/1000) for a in range(len(et_bins)-1))
 
-                radz_hists = []
-                radz_data_hists = []
-                singlephoton_hists = []
+                hists = dict()
+                for sample in trees.keys() :
+                    hists[sample] = []
 
                 def GetCutsGraph(gr_title) :
                     tmp_gr = ROOT.TGraph(2*len(et_bins)-2,
@@ -168,25 +198,18 @@ def main(options,args) :
 
                 for et in range(len(et_bins)-1) :
 
-                    if options.radzsignal :
-                        radz_hists.append(getattr(variables_rz,'h_%s'%(var))[et*variables_rz.neta + eta])
-                        radz_hists[-1].SetTitle('Z#rightarrow^{}ll#gamma MC (fudged)')
-                        radz_hists[-1].SetLineColor(ROOT.kAzure-2)
-                        radz_hists[-1].SetLineWidth(2)
-
-                    if options.radzdata :
-                        radz_data_hists.append(getattr(variables_rzd,'h_%s'%(var))[et*variables_rzd.neta + eta])
-                        radz_data_hists[-1].SetTitle('Z#rightarrow^{}ll#gamma data')
-                        radz_data_hists[-1].SetLineColor(ROOT.kBlack)
-                        radz_data_hists[-1].SetMarkerSize(0.5)
-                        radz_data_hists[-1].SetOption('pE')
-                        radz_data_hists[-1].SetLineWidth(2)
-
-                    if options.singlephotonsignal :
-                        singlephoton_hists.append(getattr(variables_sp,'h_%s'%(var))[et*variables_sp.neta + eta])
-                        singlephoton_hists[-1].SetTitle('Inclusive photons MC (fudged)')
-                        singlephoton_hists[-1].SetLineColor(ROOT.kRed+1)
-                        singlephoton_hists[-1].SetLineWidth(2)
+                    for sample in trees.keys() :
+                        if not doSample[sample] :
+                            continue
+                        hists[sample].append(getattr(variables[sample],'h_%s'%(var))[et*variables[sample].neta + eta])
+                        hists[sample][-1].SetTitle(titles[sample])
+                        hists[sample][-1].SetLineColor(colors[sample])
+                        hists[sample][-1].SetLineWidth(2)
+                        if 'data' in sample :
+                            hists[sample][-1].SetMarkerSize(0.5)
+                            hists[sample][-1].SetOption('pE')
+                        else :
+                            hists[sample][-1].SetOption('hist')
 
                     # Get the cut values
                     for id in ['tight','loose','menu3','menu4'] :
@@ -220,7 +243,7 @@ def main(options,args) :
                 # Individual canvas
                 if False :
                     can = ROOT.TCanvas('can_%s_%s_%s'%(var,status,eta),'blah',520,700)
-                    ShowerShapeEvolutionPlot(can,labels,radz_hists,singlephoton_hists,radz_data_hists)
+                    ShowerShapeEvolutionPlot(can,labels,hists['radz'],hists['incl'],hists['jf'],hists['radz_data'],hists['incl_data'])
                     plotfunc.AddHistogram(can,cuts_graphs['loose'],drawopt='l')
                     plotfunc.AddHistogram(can,cuts_graphs['tight'],drawopt='l')
                     if options.menu3 :
@@ -245,7 +268,7 @@ def main(options,args) :
                     can_barrel.cd() if (eta < 5) else can_endcap.cd()
                     eta1 = eta%5
                     pads.append(ROOT.TPad('pad_%s_%s_%s'%(var,status,eta),'blah',(172*(eta1>0) + eta1*348)/1564.,0,(172 + 348*(eta1+1))/1564.,1))
-                    ShowerShapeEvolutionPlot(pads[-1],labels,radz_hists,singlephoton_hists,radz_data_hists)
+                    ShowerShapeEvolutionPlot(pads[-1],labels,hists['radz'],hists['incl'],hists['jf'],hists['radz_data'],hists['incl_data'])
                     plotfunc.AddHistogram(pads[-1],cuts_graphs['loose'],drawopt='l')
                     plotfunc.AddHistogram(pads[-1],cuts_graphs['tight'],drawopt='l')
                     if options.menu3 :
@@ -275,7 +298,7 @@ def main(options,args) :
                             i.SetTitle('remove')
 
                     if not eta1 :
-                        plotfunc.MakeLegend(pads[-1],0.7,0.88,0.9,0.99,totalentries=3,option='l')
+                        plotfunc.MakeLegend(pads[-1],0.7,0.88,0.9,0.99,totalentries=3)
                         pads[-1].GetPrimitive('legend').SetMargin(0.4)
                         plotfunc.DrawText(pads[-1],text_lines,0.33,0.88,0.5,0.99,totalentries=3)
                     else :
@@ -284,7 +307,7 @@ def main(options,args) :
                             pads[-1].GetPrimitive('legend').Delete()
 
                     if eta1 == 1 :
-                        plotfunc.MakeLegend(pads[-1],0.01,0.93,0.5,0.99,totalentries=2,option='l')
+                        plotfunc.MakeLegend(pads[-1],0.01,0.93,0.5,0.99,totalentries=2)
 
                 ## end barrel / EC block
             ## end eta block
@@ -331,6 +354,8 @@ if __name__ == '__main__':
     p.add_option('--radztreename',type = 'string', default = 'output', dest = 'radztreename' ,help = 'Radiative-Z treename' )
 
     p.add_option('--singlephotonsignal'  ,type = 'string', default = '', dest = 'singlephotonsignal' ,help = 'Single photon Signal file' )
+    p.add_option('--singlephotondata'    ,type = 'string', default = '', dest = 'singlephotondata'   ,help = 'Single photon Data file'   )
+    p.add_option('--jetfiltered'         ,type = 'string', default = '', dest = 'jetfiltered'        ,help = 'Jet-filtered MC file'      )
     p.add_option('--singlephotontreename',type = 'string', default = 'SinglePhoton', dest = 'singlephotontreename' ,help = 'Single photon treename' )
 
     p.add_option('--FixedCutLoose',action='store_true',default=False,dest='FixedCutLoose',help='apply FixedCutLoose preselection')
