@@ -27,22 +27,6 @@ import python.PyAnalysisPlotting as anaplot
 from python.ShowerShapeEvolutionPlotter import ShowerShapeEvolutionPlot
 import PhotonIDHelpers as idhelpers
 
-variables = {
-#     'ph.e277'      ,
-#     'ph.f1'        ,
-    'CutHadLeakage':['ph.rhad*(0.8 < fabs(ph.eta2) && fabs(ph.eta2) < 1.37) + ph.rhad1*(!(0.8 < fabs(ph.eta2) && fabs(ph.eta2) < 1.37))',
-                     'y_Rhad*(0.8 < fabs(y_eta_cl_s2) && fabs(y_eta_cl_s2) < 1.37) + y_Rhad1*(!(0.8 < fabs(y_eta_cl_s2) && fabs(y_eta_cl_s2) < 1.37))',
-                     '<'],
-    'Reta37'       :['ph.reta'      ,'y_Reta'  ,'>'],
-    'Rphi33'       :['ph.rphi'      ,'y_Rphi'  ,'>'],
-    'weta2'        :['ph.weta2'     ,'y_weta2' ,'<'],
-    'fracm'        :['ph.fside'     ,'y_fracs1','<'],
-    'wtot'         :['ph.wstot'     ,'y_wtots1','<'],
-    'w1'           :['ph.w1'        ,'y_weta1' ,'<'],
-    'deltae'       :['ph.deltae'    ,'y_deltae','<'],
-    'DEmaxs1'      :['ph.eratio'    ,'y_Eratio','>'],
-    }
-
 #-----------------------------------------------
 def main(options,args) :
 
@@ -51,7 +35,7 @@ def main(options,args) :
 
     used_confs = []
     confs = dict()
-    for confstr in ['tight','loose','menu3'] :
+    for confstr in ['menu1','menu2','menu3'] :
         if not getattr(options,confstr) :
             continue
         print 'Using %s for %s'%(getattr(options,confstr),confstr)
@@ -64,8 +48,8 @@ def main(options,args) :
     trees = dict()
     titles = dict()
 
-    colors['tight'] = ROOT.kBlack
-    colors['loose'] = ROOT.kRed+1
+    colors['menu1'] = ROOT.kBlack
+    colors['menu2'] = ROOT.kRed+1
     colors['menu3'] = ROOT.kAzure-2
 
     if options.radzsignal :
@@ -132,8 +116,8 @@ def main(options,args) :
                             numerators[conf][sample].SetBinContent  (et+1,eta+1,passing)
                             numerators[conf][sample].SetBinError    (et+1,eta+1,0.01)
 
-            ## End eta block
-        ## End Et block
+                ## End eta block
+            ## End Et block
 
         photonIDs = dict()
         for c in used_confs :
@@ -151,7 +135,8 @@ def main(options,args) :
                 photonIDs[c].Set_EtBinThresholds(array('f',etbins_conf))
 
             # Add each cut
-            for var in variables.keys() :
+            variables = ['CutHadLeakage','Reta37','Rphi33','weta2','fracm','wtot','w1','deltae','DEmaxs1']
+            for var in variables :
                 cut_values = idhelpers.GetCutValuesFromConf(confs[c],var,status)
                 if not cut_values :
                     continue
@@ -284,8 +269,9 @@ def main(options,args) :
         if options.jetfilteredbackground :
             outputname = 'BkgEfficiency'
         can.Print('%s/%s_VersusPt_%s.pdf'%(options.outdir,outputname,status))
+        ## End compressed plots
 
-    ## End compressed plots
+    ## End loop over Converted, NonConverted
 
     return
     
@@ -293,18 +279,19 @@ def main(options,args) :
 if __name__ == '__main__':
     from optparse import OptionParser
     p = OptionParser()
-    p.add_option('--tight',type = 'string', default = '', dest = 'tight',help = 'Tight Menu')
-    p.add_option('--loose' ,type = 'string', default = '', dest = 'loose' ,help = 'Loose Menu' )
-    p.add_option('--menu3' ,type = 'string', default = '', dest = 'menu3' ,help = 'Another Menu' )
+    p.add_option('--menu1',type = 'string', default = '', dest = 'menu1',help = 'A Menu')
+    p.add_option('--menu2',type = 'string', default = '', dest = 'menu2',help = 'Another Menu' )
+    p.add_option('--menu3',type = 'string', default = '', dest = 'menu3',help = 'Yet Another Menu' )
+    p.add_option('--names',type = 'string', default = '', dest = 'names',help = 'Menu names, comma-separated (menu1,menu2,menu3,menu4)')
 
     p.add_option('--radzsignal'  ,type = 'string', default = '', dest = 'radzsignal' ,help = 'Radiative-Z Signal file' )
     p.add_option('--radztreename',type = 'string', default = 'output', dest = 'radztreename' ,help = 'Radiative-Z treename' )
 
     p.add_option('--singlephotonsignal'  ,type = 'string', default = '', dest = 'singlephotonsignal' ,help = 'Single photon Signal file' )
     p.add_option('--singlephotontreename',type = 'string', default = 'SinglePhoton', dest = 'singlephotontreename' ,help = 'Single photon treename' )
-
     p.add_option('--jetfilteredbackground',type = 'string', default = '', dest = 'jetfilteredbackground' ,help = 'Jet-filtered background file' )
 
+    p.add_option('--FixedCutLoose',action='store_true',default=False,dest='FixedCutLoose',help='apply FixedCutLoose preselection')
     p.add_option('--outdir',type='string',default='.',dest='outdir',help='output directory')
 
     p.add_option('--cosmetics',action='store_true',default=False,dest='cosmetics',help='For fixing plot cosmetics')
