@@ -52,10 +52,6 @@ def main(options,args) :
     colors['menu2'] = ROOT.kRed+1
     colors['menu3'] = ROOT.kAzure-2
 
-    outputname = 'Efficiency'
-    if options.jetfilteredbackground and not options.radzsignal and not options.singlephotonsignal :
-        outputname = 'BkgEfficiency'
-
     if options.radzsignal :
         samples.append('radz')
         files_rz,trees_rz,keys_rz = anaplot.GetTreesFromFiles(options.radzsignal,treename=options.radztreename)
@@ -83,6 +79,7 @@ def main(options,args) :
     cans_condensed = dict()
     pads_condensed = []
     cans_pt = dict()
+    cans_eta = dict()
 
     for status in ['Converted','NonConverted'] :
 
@@ -296,22 +293,65 @@ def main(options,args) :
         text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
         text_lines += ['|#eta|^{ }<^{ }1.37 || 1.52^{ }<^{ }|#eta|^{ }<^{ }2.37']
         plotfunc.DrawText(cans_pt[status],text_lines)
-        plotfunc.SetAxisLabels(cans_pt[status],'p_{T}^{#gamma} [GeV]','#epsilon')
-        plotfunc.AutoFixAxes(cans_pt[status])
+        plotfunc.SetAxisLabels(cans_pt[status],'p_{T}^{#gamma} [GeV]','#varepsilon')
         ## End summary plot vs Pt
+
+        ##
+        ## "Summary" plots, vs Eta
+        ##
+        cans_eta[status] = ROOT.TCanvas('can_eta_summary_%s'%(status),'blah',600,500)
+        for conf in used_confs :
+            for sample in samples :
+                num = numerators[conf][sample]
+                den = denominators[conf][sample]
+                name_num = num.GetName()+'_inclusiveVsEta'
+                name_den = den.GetName()+'_inclusiveVsEta'
+                num.ProjectionY(name_num,num.GetXaxis().FindBin(25.001),num.GetNbinsX())
+                den.ProjectionY(name_den,num.GetXaxis().FindBin(25.001),den.GetNbinsX())
+                hist = ROOT.gDirectory.Get(name_num)
+                hist.Divide(hist,ROOT.gDirectory.Get(name_den),1,1,'B')
+                hist.SetMarkerColor(colors[sample])
+                hist.SetLineColor(colors[sample])
+                if len(samples) == 1 and len(used_confs) > 1 :
+                    hist.SetMarkerColor(colors[conf])
+                    hist.SetLineColor(colors[conf])
+
+                plotfunc.AddHistogram(cans_eta[status],hist)
+
+        plotfunc.FormatCanvasAxes(cans_eta[status])
+        plotfunc.MakeLegend(cans_eta[status])
+        text_lines = [plotfunc.GetAtlasInternalText()]
+        text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
+        text_lines += ['p_{T}^{ }>^{ }25 GeV']
+        plotfunc.DrawText(cans_eta[status],text_lines)
+        plotfunc.SetAxisLabels(cans_eta[status],'p_{T}^{#gamma} [GeV]','#varepsilon')
+        ## End summary plot vs Eta
 
     ## End loop over Converted, NonConverted
 
     if not os.path.exists('%s'%(options.outdir)) :
         os.makedirs('%s'%(options.outdir))
 
+    outputname = 'Efficiency'
+    minzero = False # For bkg, vs Eta
+    if options.jetfilteredbackground and not options.radzsignal and not options.singlephotonsignal :
+        outputname = 'BkgEfficiency'
+        minzero = True
+
+    # Print condensed plots
     plotfunc.EqualizeYAxes(pads_condensed,ignorelegend=True)
     for status in cans_condensed.keys() :
         cans_condensed[status].Print('%s/%s_VersusPt_%s.pdf'%(options.outdir,outputname,status))
 
+    # Print summary plots vs Pt
     plotfunc.EqualizeYAxes(list(cans_pt[a] for a in cans_pt.keys()))
     for status in cans_pt.keys() :
         cans_pt[status].Print('%s/%s_SummaryPt_%s.pdf'%(options.outdir,outputname,status))
+
+    # Print summary plots vs Eta
+    plotfunc.EqualizeYAxes(list(cans_eta[a] for a in cans_eta.keys()),minzero=minzero)
+    for status in cans_eta.keys() :
+        cans_eta[status].Print('%s/%s_SummaryEta_%s.pdf'%(options.outdir,outputname,status))
 
     ## End loop over Converted, NonConverted
 
