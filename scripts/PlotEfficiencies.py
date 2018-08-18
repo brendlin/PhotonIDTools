@@ -52,6 +52,10 @@ def main(options,args) :
     colors['menu2'] = ROOT.kRed+1
     colors['menu3'] = ROOT.kAzure-2
 
+    outputname = 'Efficiency'
+    if options.jetfilteredbackground and not options.radzsignal and not options.singlephotonsignal :
+        outputname = 'BkgEfficiency'
+
     if options.radzsignal :
         samples.append('radz')
         files_rz,trees_rz,keys_rz = anaplot.GetTreesFromFiles(options.radzsignal,treename=options.radztreename)
@@ -76,6 +80,10 @@ def main(options,args) :
         titles['jf'] = 'Filtered jet MC (fudged)'
         marker_styles['jf'] = 34
 
+    cans_condensed = dict()
+    pads_condensed = []
+    cans_pt = dict()
+
     for status in ['Converted','NonConverted'] :
 
         # Eta bins for Plots!
@@ -90,10 +98,12 @@ def main(options,args) :
 
         numerators = dict()
         denominators = dict()
+        efficiencies = dict()
 
         for conf in used_confs :
             numerators[conf] = dict()
             denominators[conf] = dict()
+            efficiencies[conf] = dict()
             for sample in samples :
                 numerators[conf][sample]   = ROOT.TH2F('numerator_%s_%s_%s'  %(status,sample,conf),titles.get(sample),*args)
                 denominators[conf][sample] = ROOT.TH2F('denominator_%s_%s_%s'%(status,sample,conf),titles.get(sample),*args)
@@ -164,13 +174,13 @@ def main(options,args) :
                                       )
 
                 # Divide (using Binomial errors)
-                numerators[conf][sample].Divide(numerators[conf][sample],denominators[conf][sample],1,1,'B')
+                efficiencies[conf][sample] = numerators[conf][sample].Clone(numerators[conf][sample].GetName().replace('numerator','efficiency'))
+                efficiencies[conf][sample].Divide(efficiencies[conf][sample],denominators[conf][sample],1,1,'B')
 
         ##
-        ## "Compressed" plots (lots of plots on the same canvas)
+        ## "Condensed" plots (lots of plots on the same canvas)
         ##
-        can = ROOT.TCanvas('can_pt_%s'%(status),'blah',600,900);
-        pads = []
+        cans_condensed[status] = ROOT.TCanvas('can_pt_%s'%(status),'blah',600,900);
         hists_ptplot = dict()
         for conf in used_confs :
             hists_ptplot[conf] = dict()
@@ -179,18 +189,18 @@ def main(options,args) :
 
         bm = 0.08 # bottom margin
         padheight = (1-bm-0.04)/float(len(eta_bins)-2)
-        miny,maxy=9e12,-9e12
+        miny,maxy = sys.float_info.max,sys.float_info.min
         for eta in range(len(eta_bins)-1) :
             if eta == 4 : continue
             eta1 = eta - 1*(eta>4)
-            pads.append(ROOT.TPad('pad_eta%d','blah',0,bm*(eta1>0) + eta1*padheight,1, bm + (eta1+1)*padheight))
+            pads_condensed.append(ROOT.TPad('pad_eta%d','blah',0,bm*(eta1>0) + eta1*padheight,1, bm + (eta1+1)*padheight))
 
             current_hists = []
 
             for conf in used_confs :
                 for sample in samples :
-                    name = numerators[conf][sample].GetName()+'_eta%d'%(eta+1)
-                    numerators[conf][sample].ProjectionX(name,eta+1,eta+1)
+                    name = efficiencies[conf][sample].GetName()+'_eta%d'%(eta+1)
+                    efficiencies[conf][sample].ProjectionX(name,eta+1,eta+1)
                     hists_ptplot[conf][sample].append(ROOT.gDirectory.Get(name))
 
                     if len(samples) == 1 and len(used_confs) > 1 :
@@ -206,22 +216,20 @@ def main(options,args) :
 
             drawopt = 'pE'
             if eta1 > 0 :
-                pads[-1].SetBottomMargin(0)
-                pads[-1].SetTopMargin(0)
+                pads_condensed[-1].SetBottomMargin(0)
+                pads_condensed[-1].SetTopMargin(0)
             if eta == 0 :
-                pads[-1].SetTopMargin(0)
-                pads[-1].SetBottomMargin(bm/float(pads[-1].GetHNDC()))                
+                pads_condensed[-1].SetTopMargin(0)
+                pads_condensed[-1].SetBottomMargin(bm/float(pads_condensed[-1].GetHNDC()))
             if eta1 == 6 :
                 drawopt = 'pEX+'
 
             for h in current_hists :
-                plotfunc.AddHistogram(pads[-1],h,drawopt)
+                plotfunc.AddHistogram(pads_condensed[-1],h,drawopt)
 
-            plotfunc.FormatCanvasAxes(pads[-1])
-            tmp_miny,tmp_maxy = taxisfunc.AutoFixYaxis(pads[-1])
-            miny,maxy = min(miny,tmp_miny),max(maxy,tmp_maxy)
+            plotfunc.FormatCanvasAxes(pads_condensed[-1])
 
-            for h in list(pads[-1].GetListOfPrimitives()) :
+            for h in list(pads_condensed[-1].GetListOfPrimitives()) :
                 if not issubclass(type(h),ROOT.TH1) :
                     continue
 
@@ -234,26 +242,22 @@ def main(options,args) :
                 if eta1 != 0 and eta1 != 6 :
                     h.GetXaxis().SetTickLength(0)
 
-            can.cd()
-            pads[-1].Draw()
+            cans_condensed[status].cd()
+            pads_condensed[-1].Draw()
 
             tmpy = '|#eta|^{ }#in^{ }' if eta == 0 else ''
             yaxis_label = '%s[%.2f,%.2f]'%(tmpy,eta_bins[eta],eta_bins[eta+1])
             xaxislabel  = 'p_{T}^{#gamma} [GeV]' if eta == 0 else ''
-            plotfunc.SetAxisLabels(pads[-1],xaxislabel,yaxis_label)
+            plotfunc.SetAxisLabels(pads_condensed[-1],xaxislabel,yaxis_label)
 
             if eta == 1 :
                 # some plot text
                 text_lines = [plotfunc.GetAtlasInternalText()]
                 text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
-                plotfunc.DrawText(pads[-1],text_lines,0.65,0.05,0.9,0.55,totalentries=2)
+                plotfunc.DrawText(pads_condensed[-1],text_lines,0.65,0.05,0.9,0.55,totalentries=2)
             if eta == 0 :
                 # Legend
-                plotfunc.MakeLegend(pads[-1],.57,.47,.7,.75,option='pE',totalentries=1)
-
-        for pad in pads :
-            miny = max(miny,0)
-            taxisfunc.SetYaxisRanges(pad,miny+0.0001,maxy-0.0001)
+                plotfunc.MakeLegend(pads_condensed[-1],.57,.47,.7,.75,option='pE',totalentries=1)
 
         status1 = 'Converted' if status == 'Converted' else 'Unconverted'
         text = ROOT.TLatex()
@@ -261,15 +265,53 @@ def main(options,args) :
         text.SetTextSize(18)
         text.SetTextAlign(31)
         text.DrawLatex(0.95,0.97,status1)
-        can.Update()
-        if not os.path.exists('%s'%(options.outdir)) :
-            os.makedirs('%s'%(options.outdir))
+        cans_condensed[status].Update()
+        ## End Condensed plots
 
-        outputname = 'Efficiency'
-        if options.jetfilteredbackground :
-            outputname = 'BkgEfficiency'
-        can.Print('%s/%s_VersusPt_%s.pdf'%(options.outdir,outputname,status))
-        ## End compressed plots
+        ##
+        ## "Summary" plots, vs Pt
+        ##
+        cans_pt[status] = ROOT.TCanvas('can_pt_summary_%s'%(status),'blah',600,500)
+        for conf in used_confs :
+            for sample in samples :
+                num = numerators[conf][sample]
+                den = denominators[conf][sample]
+                name_num = num.GetName()+'_inclusiveVsPt'
+                name_den = den.GetName()+'_inclusiveVsPt'
+                num.ProjectionX(name_num,1,num.GetNbinsY())
+                den.ProjectionX(name_den,1,den.GetNbinsY())
+                hist = ROOT.gDirectory.Get(name_num)
+                hist.Divide(hist,ROOT.gDirectory.Get(name_den),1,1,'B')
+                hist.SetMarkerColor(colors[sample])
+                hist.SetLineColor(colors[sample])
+                if len(samples) == 1 and len(used_confs) > 1 :
+                    hist.SetMarkerColor(colors[conf])
+                    hist.SetLineColor(colors[conf])
+
+                plotfunc.AddHistogram(cans_pt[status],hist)
+
+        plotfunc.FormatCanvasAxes(cans_pt[status])
+        plotfunc.MakeLegend(cans_pt[status])
+        text_lines = [plotfunc.GetAtlasInternalText()]
+        text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
+        text_lines += ['|#eta|^{ }<^{ }1.37 || 1.52^{ }<^{ }|#eta|^{ }<^{ }2.37']
+        plotfunc.DrawText(cans_pt[status],text_lines)
+        plotfunc.SetAxisLabels(cans_pt[status],'p_{T}^{#gamma} [GeV]','#epsilon')
+        plotfunc.AutoFixAxes(cans_pt[status])
+        ## End summary plot vs Pt
+
+    ## End loop over Converted, NonConverted
+
+    if not os.path.exists('%s'%(options.outdir)) :
+        os.makedirs('%s'%(options.outdir))
+
+    plotfunc.EqualizeYAxes(pads_condensed,ignorelegend=True)
+    for status in cans_condensed.keys() :
+        cans_condensed[status].Print('%s/%s_VersusPt_%s.pdf'%(options.outdir,outputname,status))
+
+    plotfunc.EqualizeYAxes(list(cans_pt[a] for a in cans_pt.keys()))
+    for status in cans_pt.keys() :
+        cans_pt[status].Print('%s/%s_SummaryPt_%s.pdf'%(options.outdir,outputname,status))
 
     ## End loop over Converted, NonConverted
 
