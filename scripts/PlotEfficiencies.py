@@ -52,6 +52,9 @@ def main(options,args) :
     colors['menu2'] = ROOT.kRed+1
     colors['menu3'] = ROOT.kAzure-2
 
+    colors['Converted'] = ROOT.kRed-9
+    colors['NonConverted'] = ROOT.kCyan-8
+
     if options.radzsignal :
         samples.append('radz')
         files_rz,trees_rz,keys_rz = anaplot.GetTreesFromFiles(options.radzsignal,treename=options.radztreename)
@@ -80,8 +83,15 @@ def main(options,args) :
     pads_condensed = []
     cans_pt = dict()
     cans_eta = dict()
+    cans_etanum = dict()
+    for conf in used_confs :
+        cans_etanum[conf] = dict()
+        for sample in samples :
+            cans_etanum[conf][sample] = ROOT.TCanvas('can_etanum_summary_%s_%s'%(conf,sample),'blah',600,500)
 
-    for status in ['Converted','NonConverted'] :
+    cans_ptnum = dict()
+
+    for status in ['NonConverted','Converted'] :
 
         # Eta bins for Plots!
         eta_bins = [0,0.6,0.8,1.15,1.37,1.52,1.81,2.01,2.37]
@@ -327,6 +337,24 @@ def main(options,args) :
         plotfunc.SetAxisLabels(cans_eta[status],'p_{T}^{#gamma} [GeV]','#varepsilon')
         ## End summary plot vs Eta
 
+        ##
+        ## Remaining events vs Eta
+        ##
+        for conf in used_confs :
+            for sample in samples :
+                num = numerators[conf][sample]
+                name_num = num.GetName()+'_SurvivingVsEta'
+                num.ProjectionY(name_num,num.GetXaxis().FindBin(25.001),num.GetNbinsX())
+                hist = ROOT.gDirectory.Get(name_num)
+                hist.SetMarkerColor(colors[status])
+                hist.SetLineColor(ROOT.kBlack)
+                hist.SetLineWidth(1)
+                hist.SetFillColor(colors[status])
+                hist.SetTitle(status.replace('NonC','Unc'))
+                hist.Scale(1,'width')
+                plotfunc.AddHistogram(cans_etanum[conf][sample],hist)
+        ## End Remaining events vs Eta
+
     ## End loop over Converted, NonConverted
 
     if not os.path.exists('%s'%(options.outdir)) :
@@ -353,7 +381,25 @@ def main(options,args) :
     for status in cans_eta.keys() :
         cans_eta[status].Print('%s/%s_SummaryEta_%s.pdf'%(options.outdir,outputname,status))
 
-    ## End loop over Converted, NonConverted
+
+    # Print surviving events vs Eta
+    tmp = []
+    for conf in cans_etanum.keys() :
+        for sample in cans_etanum[conf].keys() :
+            plotfunc.Stack(cans_etanum[conf][sample])
+            plotfunc.FormatCanvasAxes(cans_etanum[conf][sample])
+            plotfunc.MakeLegend(cans_etanum[conf][sample])
+            text_lines = [plotfunc.GetAtlasInternalText()]
+            text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
+            text_lines += ['p_{T}^{#gamma }>^{ }25 GeV']
+            plotfunc.DrawText(cans_etanum[conf][sample],text_lines)
+            plotfunc.SetAxisLabels(cans_etanum[conf][sample],'#eta^{#gamma}','Surviving Events, dN/d#eta')
+            tmp.append(cans_etanum[conf][sample])
+
+    plotfunc.EqualizeYAxes(tmp,minzero=minzero)
+    for conf in cans_etanum.keys() :
+        for sample in cans_etanum[conf].keys() :
+            cans_etanum[conf][sample].Print('%s/%s_SurvivingEventsEta_%s_%s.pdf'%(options.outdir,outputname,conf,sample))
 
     return
     
