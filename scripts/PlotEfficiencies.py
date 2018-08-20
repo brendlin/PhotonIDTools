@@ -177,7 +177,8 @@ def main(options,args) :
                                       denominators[conf][sample],
                                       numerators[conf][sample],
                                       None,
-                                      doTruthMatchPhoton, doTruthMatchFake
+                                      doTruthMatchPhoton, doTruthMatchFake,
+                                      options.FixedCutLoose
                                       )
 
                 # Divide (using Binomial errors)
@@ -261,6 +262,8 @@ def main(options,args) :
                 # some plot text
                 text_lines = [plotfunc.GetAtlasInternalText()]
                 text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
+                if options.FixedCutLoose :
+                    text_lines += ['FixedCutLoose preselection']
                 plotfunc.DrawText(pads_condensed[-1],text_lines,0.65,0.05,0.9,0.55,totalentries=2)
             if eta == 0 :
                 # Legend
@@ -302,6 +305,8 @@ def main(options,args) :
         text_lines = [plotfunc.GetAtlasInternalText()]
         text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
         text_lines += ['|#eta|^{ }<^{ }1.37 || 1.52^{ }<^{ }|#eta|^{ }<^{ }2.37']
+        if options.FixedCutLoose :
+            text_lines += ['FixedCutLoose preselection']
         plotfunc.DrawText(cans_pt[status],text_lines)
         plotfunc.SetAxisLabels(cans_pt[status],'p_{T}^{#gamma} [GeV]','#varepsilon')
         ## End summary plot vs Pt
@@ -333,7 +338,9 @@ def main(options,args) :
         text_lines = [plotfunc.GetAtlasInternalText()]
         text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
         text_lines += ['p_{T}^{ }>^{ }25 GeV']
-        plotfunc.DrawText(cans_eta[status],text_lines)
+        if options.FixedCutLoose :
+            text_lines += ['FixedCutLoose preselection']
+        plotfunc.DrawText(cans_eta[status],text_lines,y1=0.75,totalentries=4)
         plotfunc.SetAxisLabels(cans_eta[status],'p_{T}^{#gamma} [GeV]','#varepsilon')
         ## End summary plot vs Eta
 
@@ -372,7 +379,7 @@ def main(options,args) :
         cans_condensed[status].Print('%s/%s_VersusPt_%s.pdf'%(options.outdir,outputname,status))
 
     # Print summary plots vs Pt
-    plotfunc.EqualizeYAxes(list(cans_pt[a] for a in cans_pt.keys()))
+    plotfunc.EqualizeYAxes(list(cans_pt[a] for a in cans_pt.keys()),minzero=minzero)
     for status in cans_pt.keys() :
         cans_pt[status].Print('%s/%s_SummaryPt_%s.pdf'%(options.outdir,outputname,status))
 
@@ -392,7 +399,9 @@ def main(options,args) :
             text_lines = [plotfunc.GetAtlasInternalText()]
             text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
             text_lines += ['p_{T}^{#gamma }>^{ }25 GeV']
-            plotfunc.DrawText(cans_etanum[conf][sample],text_lines)
+            if options.FixedCutLoose :
+                text_lines += ['FixedCutLoose preselection']
+            plotfunc.DrawText(cans_etanum[conf][sample],text_lines,y1=0.75,totalentries=4)
             plotfunc.SetAxisLabels(cans_etanum[conf][sample],'#eta^{#gamma}','Surviving Events, dN/d#eta')
             tmp.append(cans_etanum[conf][sample])
 
