@@ -84,12 +84,13 @@ def main(options,args) :
     cans_pt = dict()
     cans_eta = dict()
     cans_etanum = dict()
+    cans_ptnum  = dict()
     for conf in used_confs :
         cans_etanum[conf] = dict()
+        cans_ptnum [conf] = dict()
         for sample in samples :
             cans_etanum[conf][sample] = ROOT.TCanvas('can_etanum_summary_%s_%s'%(conf,sample),'blah',600,500)
-
-    cans_ptnum = dict()
+            cans_ptnum [conf][sample] = ROOT.TCanvas('can_ptnum_summary_%s_%s' %(conf,sample),'blah',600,500)
 
     for status in ['NonConverted','Converted'] :
 
@@ -362,6 +363,24 @@ def main(options,args) :
                 plotfunc.AddHistogram(cans_etanum[conf][sample],hist)
         ## End Remaining events vs Eta
 
+        ##
+        ## Remaining events vs Pt
+        ##
+        for conf in used_confs :
+            for sample in samples :
+                num = numerators[conf][sample]
+                name_num = num.GetName()+'_SurvivingVsPt'
+                num.ProjectionX(name_num,1,num.GetNbinsY())
+                hist = ROOT.gDirectory.Get(name_num)
+                hist.SetMarkerColor(colors[status])
+                hist.SetLineColor(ROOT.kBlack)
+                hist.SetLineWidth(1)
+                hist.SetFillColor(colors[status])
+                hist.SetTitle(status.replace('NonC','Unc'))
+                hist.Scale(1,'width')
+                plotfunc.AddHistogram(cans_ptnum[conf][sample],hist)
+        ## End Remaining events vs Eta
+
     ## End loop over Converted, NonConverted
 
     if not os.path.exists('%s'%(options.outdir)) :
@@ -389,6 +408,19 @@ def main(options,args) :
         cans_eta[status].Print('%s/%s_SummaryEta_%s.pdf'%(options.outdir,outputname,status))
 
 
+    # Using the canvas that has converted and unconverted surviving events.
+    def MakeCompositionPlot(can,nm) :
+        for i in can.GetListOfPrimitives() :
+            if 'NonConverted' in i.GetName() :
+                unc = i
+            elif 'Converted' in i.GetName() :
+                conv = i
+        hist_num = conv.Clone('composition_pt_%s'%(nm))
+        hist_den = conv.Clone('compositionden_pt_%s'%(nm))
+        hist_den.Add(unc)
+        hist_num.Divide(hist_num,hist_den,1,1,'B')
+        return hist_num
+
     # Print surviving events vs Eta
     tmp = []
     for conf in cans_etanum.keys() :
@@ -409,6 +441,46 @@ def main(options,args) :
     for conf in cans_etanum.keys() :
         for sample in cans_etanum[conf].keys() :
             cans_etanum[conf][sample].Print('%s/%s_SurvivingEventsEta_%s_%s.pdf'%(options.outdir,outputname,conf,sample))
+
+    # Print surviving events vs Pt
+    tmp = []
+    cans_pt_composition = dict()
+    for conf in cans_ptnum.keys() :
+        cans_pt_composition[conf] = dict()
+        for sample in cans_ptnum[conf].keys() :
+
+            # Plot text
+            text_lines = [plotfunc.GetAtlasInternalText()]
+            text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
+            text_lines += ['p_{T}^{#gamma }>^{ }25 GeV']
+            if options.FixedCutLoose :
+                text_lines += ['FixedCutLoose preselection']
+
+            # Composition plot
+            cans_pt_composition[conf][sample] = ROOT.TCanvas('can_ptcomposition_summary_%s_%s' %(conf,sample),'blah',600,500)
+            hist = MakeCompositionPlot(cans_ptnum[conf][sample],'%s_%s'%(sample,conf))
+            hist.SetMarkerColor(ROOT.kBlack)
+            hist.SetLineWidth(2)
+            plotfunc.AddHistogram(cans_pt_composition[conf][sample],hist)
+            plotfunc.SetAxisLabels(cans_pt_composition[conf][sample],'p_{T} [GeV]','Conversion fraction of surviving events')
+            taxisfunc.SetYaxisRanges(cans_pt_composition[conf][sample],0,1)
+            plotfunc.DrawText(cans_pt_composition[conf][sample],text_lines,y1=0.75,totalentries=4)
+            plotfunc.DrawText(cans_pt_composition[conf][sample],conf,x1=0.6,x2=0.9,y1=0.75,totalentries=4)
+            cans_pt_composition[conf][sample].Print('%s/%sConversionFraction_%s_%s.pdf'%(options.outdir,outputname.replace('Efficiency',''),conf,sample))
+
+            # Converted / unconverted stack plot
+            plotfunc.Stack(cans_ptnum[conf][sample])
+            plotfunc.FormatCanvasAxes(cans_ptnum[conf][sample])
+            plotfunc.MakeLegend(cans_ptnum[conf][sample])
+            plotfunc.DrawText(cans_ptnum[conf][sample],text_lines,y1=0.75,totalentries=4)
+            plotfunc.SetAxisLabels(cans_ptnum[conf][sample],'#p_{T}^{#gamma}','Surviving Events, dN/dp_{T} [/GeV]')
+            tmp.append(cans_ptnum[conf][sample])
+
+    # Print Converted / unconverted stack plot
+    plotfunc.EqualizeYAxes(tmp,minzero=minzero)
+    for conf in cans_ptnum.keys() :
+        for sample in cans_ptnum[conf].keys() :
+            cans_ptnum[conf][sample].Print('%s/%s_SurvivingEventsPt_%s_%s.pdf'%(options.outdir,outputname,conf,sample))
 
     return
     
