@@ -423,16 +423,35 @@ def main(options,args) :
 
     # Print surviving events vs Eta
     tmp = []
+    cans_eta_composition = dict()
     for conf in cans_etanum.keys() :
+        cans_eta_composition[conf] = dict()
         for sample in cans_etanum[conf].keys() :
-            plotfunc.Stack(cans_etanum[conf][sample])
-            plotfunc.FormatCanvasAxes(cans_etanum[conf][sample])
-            plotfunc.MakeLegend(cans_etanum[conf][sample])
+
+            # Plot text
             text_lines = [plotfunc.GetAtlasInternalText()]
             text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
             text_lines += ['p_{T}^{#gamma }>^{ }25 GeV']
             if options.FixedCutLoose :
                 text_lines += ['FixedCutLoose preselection']
+
+            # Composition plot
+            cans_eta_composition[conf][sample] = ROOT.TCanvas('can_etacomposition_summary_%s_%s' %(conf,sample),'blah',600,500)
+            hist = MakeCompositionPlot(cans_etanum[conf][sample],'%s_%s'%(sample,conf))
+            hist.SetMarkerColor(ROOT.kBlack)
+            hist.SetLineWidth(2)
+            plotfunc.AddHistogram(cans_eta_composition[conf][sample],hist)
+            plotfunc.FormatCanvasAxes(cans_eta_composition[conf][sample])
+            plotfunc.SetAxisLabels(cans_eta_composition[conf][sample],'|#eta|','Conversion fraction of surviving events')
+            taxisfunc.SetYaxisRanges(cans_eta_composition[conf][sample],0,1)
+            plotfunc.DrawText(cans_eta_composition[conf][sample],text_lines,y1=0.75,totalentries=4)
+            plotfunc.DrawText(cans_eta_composition[conf][sample],conf,x1=0.6,x2=0.9,y1=0.75,totalentries=4)
+            cans_eta_composition[conf][sample].Print('%s/%sConversionFractionEta_%s_%s.pdf'%(options.outdir,outputname.replace('Efficiency',''),conf,sample))
+
+            # Converted / unconverted stack plot
+            plotfunc.Stack(cans_etanum[conf][sample])
+            plotfunc.FormatCanvasAxes(cans_etanum[conf][sample])
+            plotfunc.MakeLegend(cans_etanum[conf][sample])
             plotfunc.DrawText(cans_etanum[conf][sample],text_lines,y1=0.75,totalentries=4)
             plotfunc.SetAxisLabels(cans_etanum[conf][sample],'#eta^{#gamma}','Surviving Events, dN/d#eta')
             tmp.append(cans_etanum[conf][sample])
@@ -462,11 +481,12 @@ def main(options,args) :
             hist.SetMarkerColor(ROOT.kBlack)
             hist.SetLineWidth(2)
             plotfunc.AddHistogram(cans_pt_composition[conf][sample],hist)
+            plotfunc.FormatCanvasAxes(cans_pt_composition[conf][sample])
             plotfunc.SetAxisLabels(cans_pt_composition[conf][sample],'p_{T} [GeV]','Conversion fraction of surviving events')
             taxisfunc.SetYaxisRanges(cans_pt_composition[conf][sample],0,1)
             plotfunc.DrawText(cans_pt_composition[conf][sample],text_lines,y1=0.75,totalentries=4)
             plotfunc.DrawText(cans_pt_composition[conf][sample],conf,x1=0.6,x2=0.9,y1=0.75,totalentries=4)
-            cans_pt_composition[conf][sample].Print('%s/%sConversionFraction_%s_%s.pdf'%(options.outdir,outputname.replace('Efficiency',''),conf,sample))
+            cans_pt_composition[conf][sample].Print('%s/%sConversionFractionPt_%s_%s.pdf'%(options.outdir,outputname.replace('Efficiency',''),conf,sample))
 
             # Converted / unconverted stack plot
             plotfunc.Stack(cans_ptnum[conf][sample])
