@@ -35,12 +35,17 @@ def main(options,args) :
 
     used_confs = []
     confs = dict()
-    for confstr in ['menu1','menu2','menu3'] :
+    conf_names = dict()
+    for i,confstr in enumerate(['menu1','menu2','menu3']) :
         if not getattr(options,confstr) :
             continue
         print 'Using %s for %s'%(getattr(options,confstr),confstr)
         used_confs.append(confstr)
         confs[confstr] = ROOT.TEnv(getattr(options,confstr))
+        if i+1 <= len(options.names.split(',')) :
+            conf_names[confstr] = options.names.split(',')[i]
+        else :
+            conf_names[confstr] = confstr
 
     samples = []
     colors = dict()
@@ -213,7 +218,7 @@ def main(options,args) :
                     hists_ptplot[conf][sample].append(ROOT.gDirectory.Get(name))
 
                     if len(samples) == 1 and len(used_confs) > 1 :
-                        hists_ptplot[conf][sample][-1].SetTitle(conf)
+                        hists_ptplot[conf][sample][-1].SetTitle(conf_names[conf])
 
                     if len(used_confs) == 1 :
                         hists_ptplot[conf][sample][-1].SetMarkerColor(colors[sample])
@@ -432,8 +437,9 @@ def main(options,args) :
             text_lines = [plotfunc.GetAtlasInternalText()]
             text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
             text_lines += ['p_{T}^{#gamma }>^{ }25 GeV']
+            text_lines += [conf_names[conf]]
             if options.FixedCutLoose :
-                text_lines += ['FixedCutLoose preselection']
+                text_lines[-1] += ', FixedCutLoose'
 
             # Composition plot
             cans_eta_composition[conf][sample] = ROOT.TCanvas('can_etacomposition_summary_%s_%s' %(conf,sample),'blah',600,500)
@@ -472,8 +478,9 @@ def main(options,args) :
             text_lines = [plotfunc.GetAtlasInternalText()]
             text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
             text_lines += ['p_{T}^{#gamma }>^{ }25 GeV']
+            text_lines += [conf_names[conf]]
             if options.FixedCutLoose :
-                text_lines += ['FixedCutLoose preselection']
+                text_lines[-1] += ', FixedCutLoose'
 
             # Composition plot
             cans_pt_composition[conf][sample] = ROOT.TCanvas('can_ptcomposition_summary_%s_%s' %(conf,sample),'blah',600,500)
@@ -485,7 +492,6 @@ def main(options,args) :
             plotfunc.SetAxisLabels(cans_pt_composition[conf][sample],'p_{T} [GeV]','Conversion fraction of surviving events')
             taxisfunc.SetYaxisRanges(cans_pt_composition[conf][sample],0,1)
             plotfunc.DrawText(cans_pt_composition[conf][sample],text_lines,y1=0.75,totalentries=4)
-            plotfunc.DrawText(cans_pt_composition[conf][sample],conf,x1=0.6,x2=0.9,y1=0.75,totalentries=4)
             cans_pt_composition[conf][sample].Print('%s/%sConversionFractionPt_%s_%s.pdf'%(options.outdir,outputname.replace('Efficiency',''),conf,sample))
 
             # Converted / unconverted stack plot
@@ -493,7 +499,7 @@ def main(options,args) :
             plotfunc.FormatCanvasAxes(cans_ptnum[conf][sample])
             plotfunc.MakeLegend(cans_ptnum[conf][sample])
             plotfunc.DrawText(cans_ptnum[conf][sample],text_lines,y1=0.75,totalentries=4)
-            plotfunc.SetAxisLabels(cans_ptnum[conf][sample],'#p_{T}^{#gamma}','Surviving Events, dN/dp_{T} [/GeV]')
+            plotfunc.SetAxisLabels(cans_ptnum[conf][sample],'p_{T}^{#gamma}','Surviving Events, dN/dp_{T} [/GeV]')
             tmp.append(cans_ptnum[conf][sample])
 
     # Print Converted / unconverted stack plot
@@ -511,7 +517,7 @@ if __name__ == '__main__':
     p.add_option('--menu1',type = 'string', default = '', dest = 'menu1',help = 'A Menu')
     p.add_option('--menu2',type = 'string', default = '', dest = 'menu2',help = 'Another Menu' )
     p.add_option('--menu3',type = 'string', default = '', dest = 'menu3',help = 'Yet Another Menu' )
-    p.add_option('--names',type = 'string', default = '', dest = 'names',help = 'Menu names, comma-separated (menu1,menu2,menu3,menu4)')
+    p.add_option('--names',type = 'string', default = '', dest = 'names',help = 'Menu names, comma-separated (menu1,menu2,menu3)')
 
     p.add_option('--radzsignal'  ,type = 'string', default = '', dest = 'radzsignal' ,help = 'Radiative-Z Signal file' )
     p.add_option('--radztreename',type = 'string', default = 'output', dest = 'radztreename' ,help = 'Radiative-Z treename' )
