@@ -177,19 +177,57 @@ def main(options,args) :
                 doTruthMatchFake = True
 
             for conf in used_confs :
-                ROOT.EvaluatePhotonID(trees[sample],
-                                      photonIDs[conf],
-                                      status == 'Converted',
-                                      denominators[conf][sample],
-                                      numerators[conf][sample],
-                                      None,
-                                      doTruthMatchPhoton, doTruthMatchFake,
-                                      options.FixedCutLoose
-                                      )
+                if not options.cosmetics :
+
+                    ROOT.EvaluatePhotonID(trees[sample],
+                                          photonIDs[conf],
+                                          status == 'Converted',
+                                          denominators[conf][sample],
+                                          numerators[conf][sample],
+                                          None,
+                                          doTruthMatchPhoton, doTruthMatchFake,
+                                          options.FixedCutLoose
+                                          )
 
                 # Divide (using Binomial errors)
                 efficiencies[conf][sample] = numerators[conf][sample].Clone(numerators[conf][sample].GetName().replace('numerator','efficiency'))
                 efficiencies[conf][sample].Divide(efficiencies[conf][sample],denominators[conf][sample],1,1,'B')
+
+        # Depending on what you plot, set up different color/marker schemes
+        def SetHistStyleBySampleOrConf(hist,sample,conf) :
+
+            if len(samples) == 1 and len(used_confs) > 1 :
+                hist.SetTitle(conf_names[conf])
+                hist.SetMarkerColor(colors[conf])
+                hist.SetLineColor(colors[conf])
+
+            elif len(samples) > 1 and len(used_confs) > 1 :
+                hist.SetMarkerColor(colors[conf])
+                hist.SetLineColor(colors[conf])
+                hist.SetMarkerStyle(marker_styles[sample])
+                hist.SetTitle(conf_names[conf])
+                # Rename titles to "remove" in order to remove them from legend
+                if samples.index(sample) > 0 :
+                    hist.SetTitle('remove')
+
+            else :
+                hist.SetMarkerColor(colors[sample])
+                hist.SetLineColor(colors[sample])
+
+            return
+
+        # Add "greyed out" dummy entries to the legend
+        def AddSampleEntriesToLegend(can) :
+            if  len(samples) > 1 and len(used_confs) > 1 :
+                for sample in samples :
+                    entry = can.GetPrimitive('legend').AddEntry(None,titles[sample],'p')
+                    entry.SetMarkerColor(ROOT.kGray+1)
+                    entry.SetLineWidth(2)
+                    entry.SetMarkerStyle(marker_styles[sample])
+            elif len(used_confs) > 1 :
+                for sample in samples :
+                    entry = can.GetPrimitive('legend').AddEntry(None,titles[sample],'')
+            return
 
         ##
         ## "Condensed" plots (lots of plots on the same canvas)
@@ -216,16 +254,7 @@ def main(options,args) :
                     name = efficiencies[conf][sample].GetName()+'_eta%d'%(eta+1)
                     efficiencies[conf][sample].ProjectionX(name,eta+1,eta+1)
                     hists_ptplot[conf][sample].append(ROOT.gDirectory.Get(name))
-
-                    if len(samples) == 1 and len(used_confs) > 1 :
-                        hists_ptplot[conf][sample][-1].SetTitle(conf_names[conf])
-
-                    if len(used_confs) == 1 :
-                        hists_ptplot[conf][sample][-1].SetMarkerColor(colors[sample])
-                        hists_ptplot[conf][sample][-1].SetLineColor(colors[sample])
-                    else :
-                        hists_ptplot[conf][sample][-1].SetMarkerColor(colors[conf])
-                        hists_ptplot[conf][sample][-1].SetLineColor(colors[conf])
+                    SetHistStyleBySampleOrConf(hists_ptplot[conf][sample][-1],sample,conf)
                     current_hists.append(hists_ptplot[conf][sample][-1])
 
             drawopt = 'pE'
@@ -270,10 +299,11 @@ def main(options,args) :
                 text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
                 if options.FixedCutLoose :
                     text_lines += ['FixedCutLoose preselection']
-                plotfunc.DrawText(pads_condensed[-1],text_lines,0.65,0.05,0.9,0.55,totalentries=2)
+                plotfunc.DrawText(pads_condensed[-1],text_lines,0.57,0.05,0.7,0.55,totalentries=2)
             if eta == 0 :
                 # Legend
                 plotfunc.MakeLegend(pads_condensed[-1],.57,.47,.7,.75,option='pE',totalentries=1)
+                AddSampleEntriesToLegend(pads_condensed[-1])
 
         status1 = 'Converted' if status == 'Converted' else 'Unconverted'
         text = ROOT.TLatex()
@@ -298,16 +328,12 @@ def main(options,args) :
                 den.ProjectionX(name_den,1,den.GetNbinsY())
                 hist = ROOT.gDirectory.Get(name_num)
                 hist.Divide(hist,ROOT.gDirectory.Get(name_den),1,1,'B')
-                hist.SetMarkerColor(colors[sample])
-                hist.SetLineColor(colors[sample])
-                if len(samples) == 1 and len(used_confs) > 1 :
-                    hist.SetMarkerColor(colors[conf])
-                    hist.SetLineColor(colors[conf])
-
+                SetHistStyleBySampleOrConf(hist,sample,conf)
                 plotfunc.AddHistogram(cans_pt[status],hist)
 
         plotfunc.FormatCanvasAxes(cans_pt[status])
-        plotfunc.MakeLegend(cans_pt[status])
+        plotfunc.MakeLegend(cans_pt[status],0.55,0.75,0.75,0.94,totalentries=0)
+        AddSampleEntriesToLegend(cans_pt[status])
         text_lines = [plotfunc.GetAtlasInternalText()]
         text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
         text_lines += ['|#eta|^{ }<^{ }1.37 || 1.52^{ }<^{ }|#eta|^{ }<^{ }2.37']
@@ -331,16 +357,12 @@ def main(options,args) :
                 den.ProjectionY(name_den,num.GetXaxis().FindBin(25.001),den.GetNbinsX())
                 hist = ROOT.gDirectory.Get(name_num)
                 hist.Divide(hist,ROOT.gDirectory.Get(name_den),1,1,'B')
-                hist.SetMarkerColor(colors[sample])
-                hist.SetLineColor(colors[sample])
-                if len(samples) == 1 and len(used_confs) > 1 :
-                    hist.SetMarkerColor(colors[conf])
-                    hist.SetLineColor(colors[conf])
-
+                SetHistStyleBySampleOrConf(hist,sample,conf)
                 plotfunc.AddHistogram(cans_eta[status],hist)
 
         plotfunc.FormatCanvasAxes(cans_eta[status])
-        plotfunc.MakeLegend(cans_eta[status])
+        plotfunc.MakeLegend(cans_eta[status],0.55,0.75,0.75,0.94,totalentries=0)
+        AddSampleEntriesToLegend(cans_eta[status])
         text_lines = [plotfunc.GetAtlasInternalText()]
         text_lines += [plotfunc.GetSqrtsText(13)+', 13 fb^{#minus1}']
         text_lines += ['p_{T}^{ }>^{ }25 GeV']
