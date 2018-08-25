@@ -166,6 +166,10 @@ def main(options,args) :
                 cut_values = array('f',cut_values)
                 getattr(photonIDs[c],'Set_%s'%(var))(cut_values)
 
+            # Add FixedCutLoose isolation
+            if getattr(options,'%sfcl'%(c)) :
+                photonIDs[c].isolation = "FixedCutLoose"
+
 
         # New efficiency method:
         for sample in samples :
@@ -196,8 +200,11 @@ def main(options,args) :
         # Depending on what you plot, set up different color/marker schemes
         def SetHistStyleBySampleOrConf(hist,sample,conf) :
 
+            ## if --menuXfcl is set, then add " + FixedCutLoose" to name
+            plusIso = ' + FixedCutLoose' if getattr(options,'%sfcl'%(conf)) else ''
+
             if len(samples) == 1 and len(used_confs) > 1 :
-                hist.SetTitle(conf_names[conf])
+                hist.SetTitle(conf_names[conf]+plusIso)
                 hist.SetMarkerColor(colors[conf])
                 hist.SetLineColor(colors[conf])
 
@@ -205,7 +212,7 @@ def main(options,args) :
                 hist.SetMarkerColor(colors[conf])
                 hist.SetLineColor(colors[conf])
                 hist.SetMarkerStyle(marker_styles[sample])
-                hist.SetTitle(conf_names[conf])
+                hist.SetTitle(conf_names[conf]+plusIso)
                 # Rename titles to "remove" in order to remove them from legend
                 if samples.index(sample) > 0 :
                     hist.SetTitle('remove')
@@ -540,6 +547,10 @@ if __name__ == '__main__':
     p.add_option('--menu2',type = 'string', default = '', dest = 'menu2',help = 'Another Menu' )
     p.add_option('--menu3',type = 'string', default = '', dest = 'menu3',help = 'Yet Another Menu' )
     p.add_option('--names',type = 'string', default = '', dest = 'names',help = 'Menu names, comma-separated (menu1,menu2,menu3)')
+
+    p.add_option('--menu1fcl',action='store_true',default=False,dest='menu1fcl',help='add FixedCutLoose to ID')
+    p.add_option('--menu2fcl',action='store_true',default=False,dest='menu2fcl',help='add FixedCutLoose to ID')
+    p.add_option('--menu3fcl',action='store_true',default=False,dest='menu3fcl',help='add FixedCutLoose to ID')
 
     p.add_option('--radzsignal'  ,type = 'string', default = '', dest = 'radzsignal' ,help = 'Radiative-Z Signal file' )
     p.add_option('--radztreename',type = 'string', default = 'output', dest = 'radztreename' ,help = 'Radiative-Z treename' )

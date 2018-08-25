@@ -179,9 +179,8 @@ void EvaluatePhotonID(TTree* tree, photonID* iddef,bool doConv, TH2* denominator
   tree->SetBranchAddress(isRz ? "ph.tight_id_incl" : "y_IsTight" ,&y_IsTight);
   tree->SetBranchAddress(isRz ? "ph.e277"    : "y_e277"     ,&y_e277  );
   tree->SetBranchAddress(isRz ? "ph.f1"      : "y_f1"       ,&y_f1    );
-  if (doIsolationPreselection) {
-    tree->SetBranchAddress(isRz ? "ph.isoloose": "y_iso_FixedCutLoose" ,&y_iso_FixedCutLoose);
-  }
+  tree->SetBranchAddress(isRz ? "ph.isoloose": "y_iso_FixedCutLoose" ,&y_iso_FixedCutLoose);
+
   // e277
   if (isMC) {
     if (isRz) {
@@ -288,6 +287,8 @@ void EvaluatePhotonID(TTree* tree, photonID* iddef,bool doConv, TH2* denominator
     if (iddef->do_w1           ) passNum = passNum && y_weta1  <= iddef->w1[cutbin_cuts];
     if (iddef->do_deltae       ) passNum = passNum && y_deltae <= iddef->deltae[cutbin_cuts];
     if (iddef->do_DEmaxs1      ) passNum = passNum && y_Eratio >= iddef->DEmaxs1[cutbin_cuts];
+    if (iddef->isolation == "FixedCutLoose") passNum = passNum && y_iso_FixedCutLoose;
+
     if (!passNum) continue;
 
     // Fill numerator histogram
