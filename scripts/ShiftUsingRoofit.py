@@ -26,6 +26,136 @@ import python.PyAnalysisPlotting as anaplot
 from python.ShowerShapeEvolutionPlotter import ShowerShapeEvolutionPlot
 import PhotonIDHelpers as idhelpers
 
+##################################################################################
+def getNdof(thing) :
+    argSet = thing.getVariables()
+    iter = argSet.createIterator()
+    var = iter.Next()
+    nNotConstant = 0
+    while var :
+        if not var.isConstant() :
+            nNotConstant += 1
+        var = iter.Next()
+    return nNotConstant
+
+##################################################################################
+def printArgSetArgs(argSet,nest='') :
+    iter = argSet.createIterator()
+    var = iter.Next()
+    while var :
+        print nest+' ',var.GetName(),type(var),var.getVal(),'isConstant:',var.isConstant(),
+        if hasattr(var,'getMin') :
+            print 'min',var.getMin(),'max',var.getMax()
+        else :
+            print
+        var = iter.Next()
+    return
+
+##################################################################################
+def PrintRooThing(thing,nest='') :
+    print nest+thing.GetName(),type(thing)
+
+    if hasattr(thing,'getComponents') : # a RooAbsArg function
+        print nest+'Components:'
+        printArgSetArgs(thing.getComponents(),nest=nest)
+        iter = thing.getComponents().createIterator()
+        var = iter.Next()
+        while var :
+            if var == thing :
+                var = iter.Next()
+                continue
+            PrintRooThing(var,nest=nest+'   ')
+            var = iter.Next()
+    if hasattr(thing,'getVariables') : # a RooAbsArg function
+        print nest+'Variables:'
+        printArgSetArgs(thing.getVariables(),nest=nest)
+
+    return
+
+
+#-----------------------------------------------
+def GetGaussianWithShiftAndWidthOptions(name,workspace,min,max,transformname = '') :
+
+    average = (min+max)/2.
+    step_size = (max-min)/10.
+    if not workspace.var('x') :
+        workspace.factory('x[%f,%f,%f]'%(average,min,max))
+    if not workspace.var('shift_%s'%(transformname)) :
+        workspace.factory('shift_%s[%f,%f,%f]'%(transformname,0,-step_size,step_size))
+    if not workspace.var('width_%s'%(transformname)) :
+        workspace.factory('width_%s[%f,%f,%f]'%(transformname,1,0,2))
+
+    muname = 'mu_%s'%(name)
+    sigmaname = 'sigma_%s'%(name)
+
+    mu = workspace.factory('%s[%f,%f,%f]'%(muname,average,min,max))
+    sigma = workspace.factory('%s[%f,%f,%f]'%(sigmaname,step_size,step_size/5.,5*step_size))
+
+    x_shifted = 'x-shift_%s'%(transformname)
+    x_shifted_widened = '((x-shift_%s)/width_%s)'%(transformname,transformname)
+    x_widened = '(x/width_%s)'%(transformname)
+
+    args = (x_shifted_widened,muname,x_shifted_widened,muname,sigmaname,sigmaname)
+    gauss_expr = 'exp(-0.5*(%s-%s)*(%s-%s)/(%s*%s))'%(args)
+    ws_expression = "EXPR::%s('%s',x,shift_%s,width_%s,%s,%s)"%(name,gauss_expr,transformname,transformname,muname,sigmaname)
+    gauss = workspace.factory(ws_expression)
+
+    workspace.var('shift_%s'%(transformname)).setConstant(ROOT.kTRUE)
+    workspace.var('width_%s'%(transformname)).setConstant(ROOT.kTRUE)
+
+    return gauss
+
+#-----------------------------------------------
+def GetDoubleGaussian(name,workspace,min,max) :
+    gauss1 = GetGaussianWithShiftAndWidthOptions('%s_g1'%(name),workspace,min,max,transformname='dg')
+    gauss2 = GetGaussianWithShiftAndWidthOptions('%s_g2'%(name),workspace,min,max,transformname='dg')
+    average = (min+max)/2.1
+    average2 = (min+max)/1.9
+
+    workspace.var('mu_%s_g1'%(name)).setVal(average)
+    workspace.var('mu_%s_g2'%(name)).setVal(average2)
+
+    dgauss = workspace.factory('SUM::%s ( %s_g1, frac_dg_%s[0.5,0,1]*%s_g2 )'%(name,name,name,name))
+
+    return dgauss
+
+#-----------------------------------------------
+def GetTripleGaussian(name,workspace,min,max) :
+    gauss1 = GetGaussianWithShiftAndWidthOptions('%s_tg1'%(name),workspace,min,max,transformname='tg')
+    gauss2 = GetGaussianWithShiftAndWidthOptions('%s_tg2'%(name),workspace,min,max,transformname='tg')
+    gauss3 = GetGaussianWithShiftAndWidthOptions('%s_tg3'%(name),workspace,min,max,transformname='tg')
+    average = (min+max)/2.1
+    average2 = (min+max)/1.9
+    average3 = (min+max)/2.0
+
+    workspace.var('mu_%s_tg1'%(name)).setVal(average)
+    workspace.var('mu_%s_tg2'%(name)).setVal(average2)
+    workspace.var('mu_%s_tg3'%(name)).setVal(average3)
+
+    tgauss = workspace.factory('SUM::%s ( %s_tg1, frac_tg_%s[0.5,0,1]*%s_tg2, frac2_tg_%s[0.5,0,1]*%s_tg3)'%(name,name,name,name,name,name))
+
+    return tgauss
+
+#-----------------------------------------------
+def GetQuadGaussian(name,workspace,min,max) :
+    gauss1 = GetGaussianWithShiftAndWidthOptions('%s_qg1'%(name),workspace,min,max,transformname='qg')
+    gauss2 = GetGaussianWithShiftAndWidthOptions('%s_qg2'%(name),workspace,min,max,transformname='qg')
+    gauss3 = GetGaussianWithShiftAndWidthOptions('%s_qg3'%(name),workspace,min,max,transformname='qg')
+    gauss4 = GetGaussianWithShiftAndWidthOptions('%s_qg4'%(name),workspace,min,max,transformname='qg')
+    average = (min+max)/2.1
+    average2 = (min+max)/1.9
+    average3 = (min+max)/2.0
+    average4 = (min+max)/2.2
+
+    workspace.var('mu_%s_qg1'%(name)).setVal(average)
+    workspace.var('mu_%s_qg2'%(name)).setVal(average2)
+    workspace.var('mu_%s_qg3'%(name)).setVal(average3)
+    workspace.var('mu_%s_qg4'%(name)).setVal(average4)
+
+    qgauss = workspace.factory('SUM::%s ( %s_qg1, frac_qg_%s[0.5,0,1]*%s_qg2, frac2_qg_%s[0.5,0,1]*%s_qg3, frac3_qg_%s[0.5,0,1]*%s_qg4)'%(name,name,name,name,name,name,name,name))
+
+    return qgauss
+
 #-----------------------------------------------
 def main(options,args) :
 
@@ -194,84 +324,122 @@ def main(options,args) :
         outputfile.Close()
 
 
-    
+    #
+    # Step 2: fit signal and background.
+    #
     if options.makefits :
 
         outputfile = ROOT.TFile('output.root','READ');
-        hist = outputfile.Get('CutHadLeakage_SinglePhoton_Converted_3_0')
+        hist = outputfile.Get('fracm_SinglePhoton_Converted_3_0')
+        hbkg = outputfile.Get('fracm_Jetfiltered_Converted_3_0')
+        hdata = outputfile.Get('fracm_SinglePhoton_data_Converted_3_0')
 
         ROOT.gROOT.SetBatch(False)
-#         hist.Draw()
-
-#         w = ROOT.RooWorkspace("w",ROOT.kTRUE)
-#         func = w.factory("Gaussian::gauss(variable[-0.05,0.05],mean[5.28,5.2,5.3],width[0.0027,0.001,1])")
 
         w = ROOT.RooWorkspace("w",ROOT.kTRUE)
-        name_variable = 'rhad'
+        name_variable = 'x'
         min = hist.GetBinLowEdge(0)
         max = hist.GetBinLowEdge(hist.GetNbinsX()+1)
-        #variable = ROOT.RooRealVar(name_variable,name_variable,min,max)
         variable = w.factory('%s[%f,%f]'%(name_variable,min,max))
 
-        name_function = 'decay'
+        functions = dict()
+#         functions['gauss'] = GetGaussianWithShiftAndWidthOptions('gaus',w,min,max)
+#         functions['double-gaus'] = GetDoubleGaussian('dg',w,min,max)
+#         functions['triple-gaus'] = GetTripleGaussian('tg',w,min,max)
+        functions['quad-gaus']   = GetQuadGaussian('qg',w,min,max)
 
-        if name_function == 'gaussian' :
-            sigmean  = ROOT.RooRealVar("sigmean" ,"mass"  ,0,-0.05,0.05)
-            sigwidth = ROOT.RooRealVar("sigwidth","width" ,0.01,0.0001,1.)
-            func = ROOT.RooGaussian("func","func",variable,sigmean,sigwidth)
-    
-        elif name_function == 'double gaussian' :
-            w.factory("Gaussian::g1(%s,mean_g1[0,-0.05,0.05],sigma_g1[0.01,0,0.1])"%(name_variable))
-            w.factory("Gaussian::g2(%s,mean_g2[0.03,-0.05,0.05],sigma_g2[0.01,0,0.1])"%(name_variable))
-            func = w.factory("SUM::model(frac[0.5,0,1]*g1,g2)") ;
-        
-        elif name_function == 'triple gaussian' :
-            w.factory("Gaussian::g1(%s,mean_g1[0,-0.05,0.05],sigma_g1[0.01,0,0.1])"%(name_variable))
-            w.factory("Gaussian::g2(%s,mean_g2[0.03,-0.05,0.05],sigma_g2[0.01,0,0.1])"%(name_variable))
-            w.factory("Gaussian::g3(%s,mean_g3[0.03,-0.05,0.05],sigma_g3[0.01,0,0.1])"%(name_variable))
-            func = w.factory("SUM::model(frac_g1[0.5,0,1]*g1,frac_g2[0.5,0,1]*g2,g3)") ;
-        
-        elif name_function == 'quadruple gaussian' :
-            w.factory("Gaussian::g1(%s,mean_g1[0,-0.05,0.05],sigma_g1[0.01,0,0.1])"%(name_variable))
-            w.factory("Gaussian::g2(%s,mean_g2[0,-0.05,0.05],sigma_g2[0.01,0,0.1])"%(name_variable))
-            w.factory("Gaussian::g3(%s,mean_g3[0,-0.05,0.05],sigma_g3[0.01,0,0.1])"%(name_variable))
-            w.factory("Gaussian::g4(%s,mean_g4[0,-0.05,0.05],sigma_g4[0.01,0,0.1])"%(name_variable))
-            func = w.factory("SUM::model(frac_g1[0.5,0,1]*g1,frac_g2[0.5,0,1]*g2,frac_g3[0.5,0,1]*g3,g4)") ;
-        
-        elif name_function == 'breitwigner' :
-            func = w.factory("BreitWigner::g1(%s,mean_g1[0,-0.05,0.05],sigma_g1[0.01,0,0.1])"%(name_variable))
+        fbkg = dict()
+#         fbkg['gauss'] = GetGaussianWithShiftAndWidthOptions('Bgaus',w,min,max)
+#         fbkg['double-gaus'] = GetDoubleGaussian('Bdg',w,min,max)
+#         fbkg['triple-gaus'] = GetTripleGaussian('Btg',w,min,max)
+        fbkg['quad-gaus']   = GetQuadGaussian('Bqg',w,min,max)
 
-        elif name_function == 'bw+gaus' :
-            w.factory("BreitWigner::b1(%s,mean_b1[0,-0.05,0.05],sigma_b1[0.01,0,0.1])"%(name_variable))
-            w.factory("Gaussian::g1(%s,mean_g1[0,-0.05,0.05],sigma_g1[0.01,0,0.1])"%(name_variable))
-            func = w.factory("SUM::model(frac[0.5,0,1]*g1,b1)") ;
+        mc   = ROOT.RooDataHist("mc"  ,"mc"  ,ROOT.RooArgList(variable),hist)
+        bkg  = ROOT.RooDataHist('bkg' ,'bkg' ,ROOT.RooArgList(variable),hbkg)
+        data = ROOT.RooDataHist('data','data',ROOT.RooArgList(variable),hdata)
 
-        else :
-            w.factory("BreitWigner::b1(%s,mean_b1[0,-0.05,0.05],sigma_b1[0.01,0,0.1])"%(name_variable))
-            w.factory("Gaussian::g1(%s,mean_g1[0,-0.05,0.05],sigma_g1[0.01,0,0.1])"%(name_variable))
-            w.factory("Gaussian::g2(%s,mean_g2[0,-0.05,0.05],sigma_g2[0.01,0,0.1])"%(name_variable))
-            func = w.factory("SUM::model(frac[0.5,0,1]*g1,frac_g2[0.5,0,1]*g2,b1)") ;
-
-        data = ROOT.RooDataHist("data","data",ROOT.RooArgList(variable),hist);
-
-        func.fitTo(data)
         frame = variable.frame()
-        data.plotOn(frame)
-        func.plotOn(frame)
-        
-#         frame.Draw()
-#         raw_input('pause')
+        mc.plotOn(frame)
+        mc_hist = frame.getHist('h_mc')
 
-        roofit_hist = frame.getHist('h_data')
-        curve = frame.getCurve()
-        pull = roofit_hist.makePullHist(curve)
-        
         can = plotfunc.RatioCanvas('can','can')
-        plotfunc.AddHistogram(can,roofit_hist)
-#         plotfunc.AddHistogram(can,curve,'l')
-#        plotfunc.AddRatio(can,curve,roofit_hist)
-        plotfunc.AddRatioManual(can,curve,pull,drawopt1='l',drawopt2='pE1')
-        plotfunc.FormatCanvasAxes(can)
+        plotfunc.AddHistogram(can,mc_hist)
+
+        doPull = True
+
+        #for f in ['gauss','double-gaus','triple-gaus','quad-gaus'] :
+        for f in ['quad-gaus'] :
+            functions[f].fitTo(mc)
+            functions[f].plotOn(frame,ROOT.RooFit.Name(functions[f].GetName()))
+            curve = frame.getCurve(functions[f].GetName())
+            pull = mc_hist.makePullHist(curve) if doPull else mc_hist.makeResidHist(curve)
+            PrintRooThing(functions[f])
+            ndof = getNdof(functions[f]) - 1 # subtract one for "x"
+            chisquare = frame.chiSquare(1+ndof) # n-1 bins
+            bins = hist.GetNbinsX()
+            pvalue_chi2 = ROOT.TMath.Prob(chisquare*(bins-1-ndof),bins-1-ndof)
+            #print 'ndof:',ndof,'chisquare:',chisquare,'pvalue:',pvalue_chi2
+            plotfunc.AddRatioManual(can,curve,pull,drawopt1='l',drawopt2='pE1')
+
+        bframe = variable.frame(ROOT.RooFit.Title("bkg distribution"))
+        bkg.plotOn(bframe)
+        bkg_hist = bframe.getHist('h_bkg')
+
+        bcan = plotfunc.RatioCanvas('bcan','bcan')
+        plotfunc.AddHistogram(bcan,bkg_hist)
+
+        for f in ['quad-gaus'] :
+            fbkg[f].fitTo(bkg)
+            fbkg[f].plotOn(bframe,ROOT.RooFit.Name(fbkg[f].GetName()))
+            curve = bframe.getCurve(fbkg[f].GetName())
+            pull = bkg_hist.makePullHist(curve) if doPull else bkg_hist.makeResidHist(curve)
+            plotfunc.AddRatioManual(bcan,curve,pull,drawopt1='l',drawopt2='pE1')
+
+        dframe = variable.frame(ROOT.RooFit.Title("data distribution"))
+        data.plotOn(dframe)
+        data_hist = dframe.getHist('h_data')
+
+        dcan = plotfunc.RatioCanvas('dcan','dcan')
+        plotfunc.AddHistogram(dcan,data_hist)
+
+        # fix model
+        for f in [functions['quad-gaus'],fbkg['quad-gaus']] :
+            argSet = f.getVariables()
+            iter = argSet.createIterator()
+            var = iter.Next()
+            while var :
+                name = var.GetName()
+                if name != 'x' and 'shift' not in name :
+                    var.setConstant(ROOT.kTRUE)
+                if 'shift' in name :
+                    var.setConstant(ROOT.kFALSE)
+                #print var.GetName(),var.isConstant()
+                var = iter.Next()
+
+        model = w.factory('SUM::model ( frac_model[0.5,0,1]*%s, %s)'%(functions['quad-gaus'].GetName(),fbkg['quad-gaus'].GetName()))
+        model.fitTo(data)
+        model.plotOn(dframe,ROOT.RooFit.Name(model.GetName()))
+        model.plotOn(dframe,ROOT.RooFit.Components(fbkg['quad-gaus'].GetName()),ROOT.RooFit.Name('model_bkg_component'),ROOT.RooFit.LineStyle(ROOT.kDashed))
+        model.plotOn(dframe,ROOT.RooFit.Components(functions['quad-gaus'].GetName()),ROOT.RooFit.Name('model_sig_component'))
+
+        curve = dframe.getCurve(model.GetName())
+        pull = data_hist.makePullHist(curve) if doPull else data_hist.makeResidHist(curve)
+        plotfunc.AddRatioManual(dcan,curve,pull,drawopt1='l',drawopt2='pE1')
+        plotfunc.AddHistogram(dcan,dframe.getCurve('model_bkg_component'),'l')
+        plotfunc.AddHistogram(dcan,dframe.getCurve('model_sig_component'),'l')
+
+        # fix model
+        for f in [model] :
+            argSet = f.getVariables()
+            iter = argSet.createIterator()
+            var = iter.Next()
+            while var :
+                #print var.GetName(),var.isConstant(),var.getVal()
+                var = iter.Next()
+
+        for c in [can,bcan,dcan] :
+            plotfunc.SetColors(c)
+            plotfunc.FormatCanvasAxes(c)
 
         raw_input('pause')
 
