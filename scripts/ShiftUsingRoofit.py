@@ -106,55 +106,28 @@ def GetGaussianWithShiftAndWidthOptions(name,workspace,min,max,transformname = '
     return gauss
 
 #-----------------------------------------------
-def GetDoubleGaussian(name,workspace,min,max) :
-    gauss1 = GetGaussianWithShiftAndWidthOptions('%s_g1'%(name),workspace,min,max,transformname='dg')
-    gauss2 = GetGaussianWithShiftAndWidthOptions('%s_g2'%(name),workspace,min,max,transformname='dg')
-    average = (min+max)/2.1
-    average2 = (min+max)/1.9
+def GetNGaussian(nGaus,name,workspace,min,max) :
+    transformname = 'Vg'
+    rndm = ROOT.TRandom3()
+    average = (min+max)/2.
+    for i in range(nGaus) :
+        GetGaussianWithShiftAndWidthOptions('%s_%s%d'%(name,transformname,i),workspace,min,max,transformname=transformname)
+        muval = average*(0.8 + rndm.Rndm()*0.4)
+        sigval = workspace.var('sigma_%s_%s%d'%(name,transformname,i)).getVal() * (1+rndm.Rndm()*1.0)
+        #print 'muval:',muval,'sigval:',sigval
+        workspace.var('mu_%s_%s%d'%(name,transformname,i)).setVal(muval)
+        workspace.var('sigma_%s_%s%d'%(name,transformname,i)).setVal(sigval)
 
-    workspace.var('mu_%s_g1'%(name)).setVal(average)
-    workspace.var('mu_%s_g2'%(name)).setVal(average2)
+    fac_string = 'SUM::%s ( %s_%s0'%(name,name,transformname)
+    for i in range(1,nGaus) :
+        start = i/float(nGaus)
+        fac_string += ', frac%d_%s_%s[%f,0.001,1]*'%(i,transformname,name,start)
+        fac_string += '%s_%s%d'%(name,transformname,i)
+    fac_string += ' )'
+    print fac_string
+    Ngauss = workspace.factory(fac_string)
 
-    dgauss = workspace.factory('SUM::%s ( %s_g1, frac_dg_%s[0.5,0,1]*%s_g2 )'%(name,name,name,name))
-
-    return dgauss
-
-#-----------------------------------------------
-def GetTripleGaussian(name,workspace,min,max) :
-    gauss1 = GetGaussianWithShiftAndWidthOptions('%s_tg1'%(name),workspace,min,max,transformname='tg')
-    gauss2 = GetGaussianWithShiftAndWidthOptions('%s_tg2'%(name),workspace,min,max,transformname='tg')
-    gauss3 = GetGaussianWithShiftAndWidthOptions('%s_tg3'%(name),workspace,min,max,transformname='tg')
-    average = (min+max)/2.1
-    average2 = (min+max)/1.9
-    average3 = (min+max)/2.0
-
-    workspace.var('mu_%s_tg1'%(name)).setVal(average)
-    workspace.var('mu_%s_tg2'%(name)).setVal(average2)
-    workspace.var('mu_%s_tg3'%(name)).setVal(average3)
-
-    tgauss = workspace.factory('SUM::%s ( %s_tg1, frac_tg_%s[0.5,0,1]*%s_tg2, frac2_tg_%s[0.5,0,1]*%s_tg3)'%(name,name,name,name,name,name))
-
-    return tgauss
-
-#-----------------------------------------------
-def GetQuadGaussian(name,workspace,min,max) :
-    gauss1 = GetGaussianWithShiftAndWidthOptions('%s_qg1'%(name),workspace,min,max,transformname='qg')
-    gauss2 = GetGaussianWithShiftAndWidthOptions('%s_qg2'%(name),workspace,min,max,transformname='qg')
-    gauss3 = GetGaussianWithShiftAndWidthOptions('%s_qg3'%(name),workspace,min,max,transformname='qg')
-    gauss4 = GetGaussianWithShiftAndWidthOptions('%s_qg4'%(name),workspace,min,max,transformname='qg')
-    average = (min+max)/2.1
-    average2 = (min+max)/1.9
-    average3 = (min+max)/2.0
-    average4 = (min+max)/2.2
-
-    workspace.var('mu_%s_qg1'%(name)).setVal(average)
-    workspace.var('mu_%s_qg2'%(name)).setVal(average2)
-    workspace.var('mu_%s_qg3'%(name)).setVal(average3)
-    workspace.var('mu_%s_qg4'%(name)).setVal(average4)
-
-    qgauss = workspace.factory('SUM::%s ( %s_qg1, frac_qg_%s[0.5,0,1]*%s_qg2, frac2_qg_%s[0.5,0,1]*%s_qg3, frac3_qg_%s[0.5,0,1]*%s_qg4)'%(name,name,name,name,name,name,name,name))
-
-    return qgauss
+    return Ngauss
 
 #-----------------------------------------------
 def main(options,args) :
@@ -338,21 +311,12 @@ def main(options,args) :
 
         w = ROOT.RooWorkspace("w",ROOT.kTRUE)
         name_variable = 'x'
-        min = hist.GetBinLowEdge(0)
+        min = hist.GetBinLowEdge(5)
         max = hist.GetBinLowEdge(hist.GetNbinsX()+1)
         variable = w.factory('%s[%f,%f]'%(name_variable,min,max))
 
-        functions = dict()
-#         functions['gauss'] = GetGaussianWithShiftAndWidthOptions('gaus',w,min,max)
-#         functions['double-gaus'] = GetDoubleGaussian('dg',w,min,max)
-#         functions['triple-gaus'] = GetTripleGaussian('tg',w,min,max)
-        functions['quad-gaus']   = GetQuadGaussian('qg',w,min,max)
-
-        fbkg = dict()
-#         fbkg['gauss'] = GetGaussianWithShiftAndWidthOptions('Bgaus',w,min,max)
-#         fbkg['double-gaus'] = GetDoubleGaussian('Bdg',w,min,max)
-#         fbkg['triple-gaus'] = GetTripleGaussian('Btg',w,min,max)
-        fbkg['quad-gaus']   = GetQuadGaussian('Bqg',w,min,max)
+        fsig = GetNGaussian(4,'sig',w,min,max)
+        fbkg = GetNGaussian(4,'bkg',w,min,max)
 
         mc   = ROOT.RooDataHist("mc"  ,"mc"  ,ROOT.RooArgList(variable),hist)
         bkg  = ROOT.RooDataHist('bkg' ,'bkg' ,ROOT.RooArgList(variable),hbkg)
@@ -365,21 +329,19 @@ def main(options,args) :
         can = plotfunc.RatioCanvas('can','can')
         plotfunc.AddHistogram(can,mc_hist)
 
-        doPull = True
+        doPull = False
 
-        #for f in ['gauss','double-gaus','triple-gaus','quad-gaus'] :
-        for f in ['quad-gaus'] :
-            functions[f].fitTo(mc)
-            functions[f].plotOn(frame,ROOT.RooFit.Name(functions[f].GetName()))
-            curve = frame.getCurve(functions[f].GetName())
-            pull = mc_hist.makePullHist(curve) if doPull else mc_hist.makeResidHist(curve)
-            PrintRooThing(functions[f])
-            ndof = getNdof(functions[f]) - 1 # subtract one for "x"
-            chisquare = frame.chiSquare(1+ndof) # n-1 bins
-            bins = hist.GetNbinsX()
-            pvalue_chi2 = ROOT.TMath.Prob(chisquare*(bins-1-ndof),bins-1-ndof)
-            #print 'ndof:',ndof,'chisquare:',chisquare,'pvalue:',pvalue_chi2
-            plotfunc.AddRatioManual(can,curve,pull,drawopt1='l',drawopt2='pE1')
+        fsig.fitTo(mc)
+        fsig.plotOn(frame,ROOT.RooFit.Name(fsig.GetName()))
+        curve = frame.getCurve(fsig.GetName())
+        pull = mc_hist.makePullHist(curve) if doPull else mc_hist.makeResidHist(curve)
+        PrintRooThing(fsig)
+        ndof = getNdof(fsig) - 1 # subtract one for "x"
+        chisquare = frame.chiSquare(1+ndof) # n-1 bins
+        bins = hist.GetNbinsX()
+        pvalue_chi2 = ROOT.TMath.Prob(chisquare*(bins-1-ndof),bins-1-ndof)
+        #print 'ndof:',ndof,'chisquare:',chisquare,'pvalue:',pvalue_chi2
+        plotfunc.AddRatioManual(can,curve,pull,drawopt1='l',drawopt2='pE1')
 
         bframe = variable.frame(ROOT.RooFit.Title("bkg distribution"))
         bkg.plotOn(bframe)
@@ -388,12 +350,11 @@ def main(options,args) :
         bcan = plotfunc.RatioCanvas('bcan','bcan')
         plotfunc.AddHistogram(bcan,bkg_hist)
 
-        for f in ['quad-gaus'] :
-            fbkg[f].fitTo(bkg)
-            fbkg[f].plotOn(bframe,ROOT.RooFit.Name(fbkg[f].GetName()))
-            curve = bframe.getCurve(fbkg[f].GetName())
-            pull = bkg_hist.makePullHist(curve) if doPull else bkg_hist.makeResidHist(curve)
-            plotfunc.AddRatioManual(bcan,curve,pull,drawopt1='l',drawopt2='pE1')
+        fbkg.fitTo(bkg)
+        fbkg.plotOn(bframe,ROOT.RooFit.Name(fbkg.GetName()))
+        curve = bframe.getCurve(fbkg.GetName())
+        pull = bkg_hist.makePullHist(curve) if doPull else bkg_hist.makeResidHist(curve)
+        plotfunc.AddRatioManual(bcan,curve,pull,drawopt1='l',drawopt2='pE1')
 
         dframe = variable.frame(ROOT.RooFit.Title("data distribution"))
         data.plotOn(dframe)
@@ -403,7 +364,7 @@ def main(options,args) :
         plotfunc.AddHistogram(dcan,data_hist)
 
         # fix model
-        for f in [functions['quad-gaus'],fbkg['quad-gaus']] :
+        for f in [fsig,fbkg] :
             argSet = f.getVariables()
             iter = argSet.createIterator()
             var = iter.Next()
@@ -416,11 +377,11 @@ def main(options,args) :
                 #print var.GetName(),var.isConstant()
                 var = iter.Next()
 
-        model = w.factory('SUM::model ( frac_model[0.5,0,1]*%s, %s)'%(functions['quad-gaus'].GetName(),fbkg['quad-gaus'].GetName()))
+        model = w.factory('SUM::model ( frac_model[0.5,0,1]*%s, %s)'%(fsig.GetName(),fbkg.GetName()))
         model.fitTo(data)
         model.plotOn(dframe,ROOT.RooFit.Name(model.GetName()))
-        model.plotOn(dframe,ROOT.RooFit.Components(fbkg['quad-gaus'].GetName()),ROOT.RooFit.Name('model_bkg_component'),ROOT.RooFit.LineStyle(ROOT.kDashed))
-        model.plotOn(dframe,ROOT.RooFit.Components(functions['quad-gaus'].GetName()),ROOT.RooFit.Name('model_sig_component'))
+        model.plotOn(dframe,ROOT.RooFit.Components(fbkg.GetName()),ROOT.RooFit.Name('model_bkg_component'),ROOT.RooFit.LineStyle(ROOT.kDashed))
+        model.plotOn(dframe,ROOT.RooFit.Components(fsig.GetName()),ROOT.RooFit.Name('model_sig_component'))
 
         curve = dframe.getCurve(model.GetName())
         pull = data_hist.makePullHist(curve) if doPull else data_hist.makeResidHist(curve)
@@ -428,13 +389,13 @@ def main(options,args) :
         plotfunc.AddHistogram(dcan,dframe.getCurve('model_bkg_component'),'l')
         plotfunc.AddHistogram(dcan,dframe.getCurve('model_sig_component'),'l')
 
-        # fix model
+        # print model
         for f in [model] :
             argSet = f.getVariables()
             iter = argSet.createIterator()
             var = iter.Next()
             while var :
-                #print var.GetName(),var.isConstant(),var.getVal()
+                print var.GetName(),var.isConstant(),var.getVal()
                 var = iter.Next()
 
         for c in [can,bcan,dcan] :
