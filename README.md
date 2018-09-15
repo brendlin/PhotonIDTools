@@ -11,6 +11,9 @@ new cut-based ID.
  - **scripts/PlotShowerShapeVariables.py**:
    - This script can be used to plot shower shape variables and the cut values applied to them. 
  - MC-to-MC AF2 scale factors (coming soon)
+   - More details to follow.
+ - **makePicoXaod.py** (part of the genericUtils package)
+   - This script allows you to make a smaller version of an existing flat ntuple.
 
 
 **PlotEfficiencies.py** - Description and Instructions
@@ -80,3 +83,37 @@ The output of this script is a set of pdfs containing the plotted shower shapes
 and the cuts applied to them. To reduce "plot fatigue", visually similar plots are grouped
 to focus on the evolution of shower shapes vs p<sub>T</sub>. Further grouping reduces the
 number of pdfs from 1260 to 36, by a factor of 35.
+
+**makePicoXaod.py** (genericUtils) - Description and Instructions
+==================
+
+### What is it
+
+This script, which lives inside genericUtils,
+allows you to skim the existing ntuples (in our case radiative-Z and single-photon)
+into much smaller ntuples that can e.g. be saved on your computer. Special configuration files are
+included in this package to help run this package on photon-specific samples:
+ - makePicoXaod_RadZconf.py
+ - makePicoXaod_SinglePhotonConf.py
+
+The output will be a much smaller ntuple saved in an output directory of your choice.
+For more information on the script, see the README from the genericUtils package.
+
+### How to run it
+
+You can run the script using the following commands (Rad-Z):
+
+    cd testarea
+    ln -s /path/to/PhotonIDTools/data/makePicoXaod_RadZconf.py .
+    makePicoXaod.py --config makePicoXaod_RadZconf.py --bkgs Sherpa_CT10_mumugammaPt10_35.root,mc16d.Sherpa_CT10_mumugammaPt140.root --outdir radz_output
+    
+Note that `--bkgs` is a comma-separated list of files that you want to run over. The output
+files will have the same name as the input files, with "_pico.root" at the end, and stored
+in the "radz_output" directory in this case.
+
+Similarly, single-photon ntuples can be slimmed this way:
+
+    cd testarea
+    ln -s /path/to/PhotonIDTools/data/makePicoXaod_SinglePhotonConf.py .
+    python makePicoXaod.py --config makePicoXaod_SinglePhotonConf.py --bkgs PyPt17_inf_mc16d_v21.root --outdir sp_output
+
