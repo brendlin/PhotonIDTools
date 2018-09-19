@@ -303,9 +303,9 @@ def main(options,args) :
     if options.makefits :
 
         outputfile = ROOT.TFile('output.root','READ');
-        hist = outputfile.Get('fracm_SinglePhoton_Converted_3_0')
-        hbkg = outputfile.Get('fracm_Jetfiltered_Converted_3_0')
-        hdata = outputfile.Get('fracm_SinglePhoton_data_Converted_3_0')
+        hist = outputfile.Get('%s_SinglePhoton_Converted_%d_%d'%(options.variable,options.etbin,options.etabin))
+        hbkg = outputfile.Get('%s_Jetfiltered_Converted_%d_%d'%(options.variable,options.etbin,options.etabin))
+        hdata = outputfile.Get('%s_SinglePhoton_data_Converted_%d_%d'%(options.variable,options.etbin,options.etabin))
 
         ROOT.gROOT.SetBatch(False)
 
@@ -326,7 +326,7 @@ def main(options,args) :
         mc.plotOn(frame)
         mc_hist = frame.getHist('h_mc')
 
-        can = plotfunc.RatioCanvas('can','can')
+        can = plotfunc.RatioCanvas('SignalFit_%s_%d_%d'%(options.variable,options.etbin,options.etabin),'can')
         plotfunc.AddHistogram(can,mc_hist)
 
         doPull = False
@@ -347,7 +347,7 @@ def main(options,args) :
         bkg.plotOn(bframe)
         bkg_hist = bframe.getHist('h_bkg')
 
-        bcan = plotfunc.RatioCanvas('bcan','bcan')
+        bcan = plotfunc.RatioCanvas('BackgroundFit_%s_%d_%d'%(options.variable,options.etbin,options.etabin),'bcan')
         plotfunc.AddHistogram(bcan,bkg_hist)
 
         fbkg.fitTo(bkg)
@@ -360,7 +360,7 @@ def main(options,args) :
         data.plotOn(dframe)
         data_hist = dframe.getHist('h_data')
 
-        dcan = plotfunc.RatioCanvas('dcan','dcan')
+        dcan = plotfunc.RatioCanvas('DataFit_%s_%d_%d'%(options.variable,options.etbin,options.etabin),'dcan')
         plotfunc.AddHistogram(dcan,data_hist)
 
         # fix model
@@ -401,8 +401,16 @@ def main(options,args) :
         for c in [can,bcan,dcan] :
             plotfunc.SetColors(c)
             plotfunc.FormatCanvasAxes(c)
+            plotfunc.SetAxisLabels(c,hist.GetXaxis().GetTitle(),'entries')
 
-        raw_input('pause')
+        if not os.path.exists('%s'%(options.outdir)) :
+            os.makedirs('%s'%(options.outdir))
+        if not os.path.exists('%s/%s'%(options.outdir,options.variable)) :
+            os.makedirs('%s/%s'%(options.outdir,options.variable))
+
+        can.Print( '%s/%s/%s.pdf'%(options.outdir,options.variable, can.GetName()))
+        dcan.Print('%s/%s/%s.pdf'%(options.outdir,options.variable,dcan.GetName()))
+        bcan.Print('%s/%s/%s.pdf'%(options.outdir,options.variable,bcan.GetName()))
 
         outputfile.Close()
 
@@ -433,7 +441,10 @@ if __name__ == '__main__':
     p.add_option('--makehists',action='store_true',default=False,dest='makehists',help='Make the histograms')
     p.add_option('--makefits' ,action='store_true',default=False,dest='makefits' ,help='Do the fits')
 
+    p.add_option('--variable',type='string',default='fracm',dest='variable',help='The variable to fit')
     p.add_option('--outdir',type='string',default='.',dest='outdir',help='output directory')
+    p.add_option('--etbin',type='int',default=2,dest='etbin',help='Et bin')
+    p.add_option('--etabin',type='int',default=0,dest='etabin',help='Eta bin')
 
     options,args = p.parse_args()
     
