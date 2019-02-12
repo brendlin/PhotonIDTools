@@ -24,3 +24,15 @@ How to add a file:
   git push
   ```
   
+**ScaleFactorPlots.py** - plot cosmetics for the Rel 21.2 Egamma Paper
+================
+
+I am adding just a brief description here of this script, which formats the scale factor plots for
+the Rel 21.2 Egamma paper. The files themselves are still hard-coded -- if it becomes useful to
+make this script more general, then it can be done in the future.
+
+The usage is described below:
+  ```
+  ScaleFactorPlots.py --eta 0
+  ScaleFactorPlots.py --eta 3 --converted
+  ```
