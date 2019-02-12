@@ -74,6 +74,38 @@ def PrintRooThing(thing,nest='') :
 
 
 #-----------------------------------------------
+def GetLandauWithShiftAndWidthOptions(name,workspace,min,max,transformname = '') :
+
+    average = (min+max)/2.
+    step_size = (max-min)/10.
+    if not workspace.var('x') :
+        workspace.factory('x[%f,%f,%f]'%(average,min,max))
+    if not workspace.var('shift_%s'%(transformname)) :
+        workspace.factory('shift_%s[%f,%f,%f]'%(transformname,0,-step_size,step_size))
+    if not workspace.var('width_%s'%(transformname)) :
+        workspace.factory('width_%s[%f,%f,%f]'%(transformname,1,0,2))
+
+    muname = 'mu_%s'%(name)
+    sigmaname = 'sigma_%s'%(name)
+
+    mu = workspace.factory('%s[%f,%f,%f]'%(muname,average,min,max))
+    sigma = workspace.factory('%s[%f,%f,%f]'%(sigmaname,step_size,step_size/5.,5*step_size))
+
+    x_shifted = 'x-shift_%s'%(transformname)
+    x_shifted_widened = '((x-shift_%s)/width_%s)'%(transformname,transformname)
+    x_widened = '(x/width_%s)'%(transformname)
+
+    args = (x_shifted_widened,muname,sigmaname)
+    landau_expr = 'TMath::Landau(%s,%s,%s)'%(args)
+    ws_expression = "EXPR::%s('%s',x,shift_%s,width_%s,%s,%s)"%(name,landau_expr,transformname,transformname,muname,sigmaname)
+    gauss = workspace.factory(ws_expression)
+
+    workspace.var('shift_%s'%(transformname)).setConstant(ROOT.kTRUE)
+    workspace.var('width_%s'%(transformname)).setConstant(ROOT.kTRUE)
+
+    return gauss
+
+#-----------------------------------------------
 def GetGaussianWithShiftAndWidthOptions(name,workspace,min,max,transformname = '') :
 
     average = (min+max)/2.
@@ -307,8 +339,6 @@ def main(options,args) :
         hbkg = outputfile.Get('%s_Jetfiltered_Converted_%d_%d'%(options.variable,options.etbin,options.etabin))
         hdata = outputfile.Get('%s_SinglePhoton_data_Converted_%d_%d'%(options.variable,options.etbin,options.etabin))
 
-        ROOT.gROOT.SetBatch(False)
-
         w = ROOT.RooWorkspace("w",ROOT.kTRUE)
         name_variable = 'x'
         min = hist.GetBinLowEdge(5)
@@ -316,7 +346,8 @@ def main(options,args) :
         variable = w.factory('%s[%f,%f]'%(name_variable,min,max))
 
         fsig = GetNGaussian(4,'sig',w,min,max)
-        fbkg = GetNGaussian(4,'bkg',w,min,max)
+        #fbkg = GetNGaussian(4,'bkg',w,min,max)
+        fbkg = GetLandauWithShiftAndWidthOptions('bkg',w,min,max)
 
         mc   = ROOT.RooDataHist("mc"  ,"mc"  ,ROOT.RooArgList(variable),hist)
         bkg  = ROOT.RooDataHist('bkg' ,'bkg' ,ROOT.RooArgList(variable),hbkg)
@@ -329,7 +360,7 @@ def main(options,args) :
         can = plotfunc.RatioCanvas('SignalFit_%s_%d_%d'%(options.variable,options.etbin,options.etabin),'can')
         plotfunc.AddHistogram(can,mc_hist)
 
-        doPull = False
+        doPull = True
 
         fsig.fitTo(mc)
         fsig.plotOn(frame,ROOT.RooFit.Name(fsig.GetName()))
@@ -402,6 +433,8 @@ def main(options,args) :
             plotfunc.SetColors(c)
             plotfunc.FormatCanvasAxes(c)
             plotfunc.SetAxisLabels(c,hist.GetXaxis().GetTitle(),'entries')
+            if doPull :
+                taxisfunc.SetYaxisRanges(plotfunc.GetBotPad(c),-4,4)
 
         if not os.path.exists('%s'%(options.outdir)) :
             os.makedirs('%s'%(options.outdir))
